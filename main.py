@@ -95,8 +95,9 @@ def create_big_bettor_tweet(data):
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
+        game_title = pick['game_title']
         
-        lines.append(f"{i}. {team} {odds}")
+        lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   💵 {handle_pct} of money | 🎯 {bets_pct} of bets")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
@@ -123,8 +124,9 @@ def create_square_bets_tweet(data):
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
+        game_title = pick['game_title']
         
-        lines.append(f"{i}. {team} {odds}")
+        lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   📊 {bets_pct} of bets but only {handle_pct} of money")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
@@ -151,8 +153,9 @@ def create_sharp_longshots_tweet(data):
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
+        game_title = pick['game_title']
         
-        lines.append(f"{i}. {team} {odds}")
+        lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   💎 {handle_pct} of money | 🎯 {bets_pct} of bets")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
@@ -179,8 +182,9 @@ def create_get_rich_quick_tweet(data):
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
+        game_title = pick['game_title']
         
-        lines.append(f"{i}. {team} {odds}")
+        lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   💰 {handle_pct} of money | 🎯 {bets_pct} of bets")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
