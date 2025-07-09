@@ -1,0 +1,18 @@
+services:
+  - type: cron
+    name: draftkings-splits-bot-cron
+    env: python
+    runtime: python-3.11
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: python main.py
+    schedule: "0 16 * * *"  # 4 PM UTC (adjust as needed)
+    plan: starter
+    envVars:
+      - key: API_KEY
+        sync: false
+      - key: API_SECRET
+        sync: false
+      - key: ACCESS_TOKEN
+        sync: false
+      - key: ACCESS_SECRET
+        sync: false
