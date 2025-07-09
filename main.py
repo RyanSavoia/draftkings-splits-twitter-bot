@@ -91,18 +91,17 @@ def create_big_bettor_tweet(data):
     
     for i, pick in enumerate(picks, 1):
         handle_pct = pick['handle_pct']
-        bets_pct = pick['bets_pct']
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
         game_title = pick['game_title']
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   💵 {handle_pct} of money | 🎯 {bets_pct} of bets")
+        lines.append(f"   {handle_pct} of money")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
     
-    lines.append("When the money % is way higher than bet %, the big players are backing it.")
+    lines.append("Big money on these plays... you guys taking any of them?")
     
     return '\n'.join(lines)
 
@@ -127,7 +126,7 @@ def create_square_bets_tweet(data):
         game_title = pick['game_title']
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   📊 {bets_pct} of bets but only {handle_pct} of money")
+        lines.append(f"   {bets_pct} of bets but only {handle_pct} of money")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
     
@@ -156,7 +155,7 @@ def create_sharp_longshots_tweet(data):
         game_title = pick['game_title']
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   💎 {handle_pct} of money | 🎯 {bets_pct} of bets")
+        lines.append(f"   {handle_pct} of money | {bets_pct} of bets")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
     
@@ -185,7 +184,7 @@ def create_get_rich_quick_tweet(data):
         game_title = pick['game_title']
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   💰 {handle_pct} of money | 🎯 {bets_pct} of bets")
+        lines.append(f"   {handle_pct} of money | {bets_pct} of bets")
         lines.append(f"   ⏰ {game_time}")
         lines.append("")
     
