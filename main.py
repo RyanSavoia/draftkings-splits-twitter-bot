@@ -98,7 +98,7 @@ def create_big_bettor_tweet(data):
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   {handle_pct} of money")
-        lines.append(f"   ⏰ {game_time}")
+        lines.append(f"   {game_time}")
         lines.append("")
     
     lines.append("Big money on these plays... you guys taking any of them?")
@@ -127,39 +127,10 @@ def create_square_bets_tweet(data):
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   {bets_pct} of bets but only {handle_pct} of money")
-        lines.append(f"   ⏰ {game_time}")
+        lines.append(f"   {game_time}")
         lines.append("")
     
     lines.append("The public loves these bets, but the money doesn't. Contrarian play?")
-    
-    return '\n'.join(lines)
-
-def create_sharp_longshots_tweet(data):
-    """Create tweet for sharpest longshots"""
-    if not data or not data.get('sharpest_longshots'):
-        return None
-    
-    picks = data['sharpest_longshots']
-    
-    lines = []
-    lines.append("🎯 SHARP LONGSHOTS 🎯")
-    lines.append("Big money backing these +200 or higher underdogs:")
-    lines.append("")
-    
-    for i, pick in enumerate(picks, 1):
-        handle_pct = pick['handle_pct']
-        bets_pct = pick['bets_pct']
-        team = pick['team']
-        odds = pick['odds'].replace('−', '-')
-        game_time = pick['game_time'].split(', ')[1]  # Get just the time part
-        game_title = pick['game_title']
-        
-        lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   {handle_pct} of money | {bets_pct} of bets")
-        lines.append(f"   ⏰ {game_time}")
-        lines.append("")
-    
-    lines.append("When big money backs big underdogs, they know something we don't.")
     
     return '\n'.join(lines)
 
@@ -185,7 +156,7 @@ def create_get_rich_quick_tweet(data):
         
         lines.append(f"{i}. {team} {odds} ({game_title})")
         lines.append(f"   {handle_pct} of money | {bets_pct} of bets")
-        lines.append(f"   ⏰ {game_time}")
+        lines.append(f"   {game_time}")
         lines.append("")
     
     lines.append("These are lottery tickets, but when big money plays them...")
@@ -218,16 +189,14 @@ def run_draftkings_tweets():
         print("❌ Failed to setup Twitter API")
         return
     
-    # Get all DraftKings data
+    # Get DraftKings data (removed sharp_longshots_data)
     big_bettor_data = get_draftkings_data("big-bettor-alerts")
     square_bets_data = get_draftkings_data("biggest-square-bets")
-    sharp_longshots_data = get_draftkings_data("sharpest-longshots")
     get_rich_quick_data = get_draftkings_data("get-rich-quick")
     
-    # Create tweets
+    # Create tweets (removed sharp_longshots_tweet)
     big_bettor_tweet = create_big_bettor_tweet(big_bettor_data)
     square_bets_tweet = create_square_bets_tweet(square_bets_data)
-    sharp_longshots_tweet = create_sharp_longshots_tweet(sharp_longshots_data)
     get_rich_quick_tweet = create_get_rich_quick_tweet(get_rich_quick_data)
     
     # Post tweets with delays
@@ -237,7 +206,6 @@ def run_draftkings_tweets():
     tweets_to_post = [
         (big_bettor_tweet, "Big Bettor Alerts"),
         (square_bets_tweet, "Square Bets"),
-        (sharp_longshots_tweet, "Sharp Longshots"),
         (get_rich_quick_tweet, "Get Rich Quick")
     ]
     
