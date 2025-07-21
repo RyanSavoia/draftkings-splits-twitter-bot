@@ -113,8 +113,8 @@ def create_square_bets_tweet(data):
     picks = data['biggest_square_bets']
     
     lines = []
-    lines.append("🤡 BIGGEST SQUARE BETS 🤡")
-    lines.append("High public betting % but low money % = fade the public?")
+    lines.append("🤡 BIGGEST SQUARE BETS 🤡 (fade these)")
+    lines.append("Lots of squares but not a lot of dollars, take the opposite of these bets!")
     lines.append("")
     
     for i, pick in enumerate(picks, 1):
