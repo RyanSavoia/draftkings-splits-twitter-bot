@@ -42,8 +42,8 @@ def setup_twitter_api():
         print(f"❌ Error setting up Twitter API: {e}")
         return None
 
-def get_draftkings_data(endpoint):
-    """Fetch data from DraftKings API endpoint"""
+def get_sport_data(endpoint):
+    """Fetch data from DraftKings API endpoint for specific sport"""
     try:
         url = f"{DRAFTKINGS_BASE_URL}/{endpoint}"
         print(f"🌐 Fetching data from {url}")
@@ -52,7 +52,29 @@ def get_draftkings_data(endpoint):
         response.raise_for_status()
         data = response.json()
         
-        print(f"✅ Got {data.get('count', 0)} picks from {endpoint}")
+        # Filter picks based on 30% rule (handle% must be 30% higher than bets%)
+        if data and data.get('big_bettor_alerts'):
+            filtered_picks = []
+            for pick in data['big_bettor_alerts']:
+                try:
+                    handle_pct = int(pick['handle_pct'].replace('%', ''))
+                    bets_pct = int(pick['bets_pct'].replace('%', ''))
+                    
+                    if handle_pct >= bets_pct + 30:
+                        filtered_picks.append(pick)
+                except (ValueError, KeyError):
+                    continue  # Skip picks with invalid percentage data
+            
+            # Sort by biggest difference (handle% - bets%)
+            filtered_picks.sort(key=lambda x: 
+                int(x['handle_pct'].replace('%', '')) - int(x['bets_pct'].replace('%', '')), 
+                reverse=True
+            )
+            
+            data['big_bettor_alerts'] = filtered_picks
+        
+        pick_count = len(data.get('big_bettor_alerts', []))
+        print(f"✅ Got {pick_count} qualifying picks from {endpoint}")
         return data
     except requests.exceptions.Timeout:
         print(f"⏰ Request timed out for {endpoint}")
@@ -64,53 +86,65 @@ def get_draftkings_data(endpoint):
         print(f"❌ Error fetching {endpoint}: {e}")
         return None
 
-def format_bet_line(pick):
-    """Format a single bet line for tweet"""
-    team = pick['team']
-    odds = pick['odds']
-    market = pick['market_type']
-    game_time = pick['game_time']
-    
-    # Clean up the odds display
-    if odds.startswith('−'):
-        odds = odds.replace('−', '-')
-    
-    return f"• {team} {odds} ({market}) - {game_time}"
+def get_sport_emoji(sport):
+    """Get emoji for sport"""
+    emojis = {
+        'MLB': '⚾',
+        'NBA': '🏀',
+        'NFL': '🏈',
+        'NHL': '🏒'
+    }
+    return emojis.get(sport, '💰')
 
-def create_big_bettor_tweet(data):
-    """Create tweet for big bettor alerts"""
+def create_big_bettor_tweet(data, sport):
+    """Create tweet for big bettor alerts for specific sport"""
     if not data or not data.get('big_bettor_alerts'):
         return None
     
     picks = data['big_bettor_alerts']
     
+    if not picks:
+        return None
+    
+    emoji = get_sport_emoji(sport)
+    pick_count = len(picks)
+    
     lines = []
-    lines.append("💰 BIG BETTOR ALERTS 💰")
-    lines.append("Big money is flowing heavy on these picks:")
+    
+    # Dynamic header based on count
+    if pick_count == 1:
+        lines.append(f"{emoji} This {sport} game has big money backing it today")
+    else:
+        lines.append(f"{emoji} {pick_count} {sport} games with big money backing them today")
+    
     lines.append("")
     
-    for i, pick in enumerate(picks, 1):
+    for pick in picks:
         handle_pct = pick['handle_pct']
+        bets_pct = pick['bets_pct']
         team = pick['team']
         odds = pick['odds'].replace('−', '-')
         game_time = pick['game_time'].split(', ')[1]  # Get just the time part
         game_title = pick['game_title']
         
-        lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   {handle_pct} of money")
-        lines.append(f"   {game_time}")
+        lines.append(f"{team} {odds} ({game_title})")
+        lines.append(f"🎫 {bets_pct} / 💰 {handle_pct}")
+        lines.append(f"{game_time}")
         lines.append("")
     
-    lines.append("Big money on these plays... you guys taking any of them?")
+    lines.append("Drop a ❤️ if you guys are tailing!")
     
     return '\n'.join(lines)
 
 def create_square_bets_tweet(data):
-    """Create tweet for biggest square bets"""
+    """Create tweet for biggest square bets (keeping original functionality)"""
     if not data or not data.get('biggest_square_bets'):
         return None
     
     picks = data['biggest_square_bets']
+    
+    if not picks:
+        return None
     
     lines = []
     lines.append("🤡 BIGGEST SQUARE BETS 🤡 (fade these)")
@@ -131,35 +165,6 @@ def create_square_bets_tweet(data):
         lines.append("")
     
     lines.append("The public loves these bets, but the money doesn't. Contrarian play?")
-    
-    return '\n'.join(lines)
-
-def create_get_rich_quick_tweet(data):
-    """Create tweet for get rich quick picks"""
-    if not data or not data.get('get_rich_quick'):
-        return None
-    
-    picks = data['get_rich_quick']
-    
-    lines = []
-    lines.append("🚀 GET RICH QUICK 🚀")
-    lines.append("Massive underdogs (+400+) getting serious money:")
-    lines.append("")
-    
-    for i, pick in enumerate(picks, 1):
-        handle_pct = pick['handle_pct']
-        bets_pct = pick['bets_pct']
-        team = pick['team']
-        odds = pick['odds'].replace('−', '-')
-        game_time = pick['game_time'].split(', ')[1]  # Get just the time part
-        game_title = pick['game_title']
-        
-        lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   {handle_pct} of money | {bets_pct} of bets")
-        lines.append(f"   {game_time}")
-        lines.append("")
-    
-    lines.append("These are lottery tickets, but when big money plays them...")
     
     return '\n'.join(lines)
 
@@ -189,36 +194,35 @@ def run_draftkings_tweets():
         print("❌ Failed to setup Twitter API")
         return
     
-    # Get DraftKings data (removed sharp_longshots_data)
-    big_bettor_data = get_draftkings_data("big-bettor-alerts")
-    square_bets_data = get_draftkings_data("biggest-square-bets")
-    get_rich_quick_data = get_draftkings_data("get-rich-quick")
+    # Sports to check for big bettor alerts
+    sports = [
+        ('big-bettor-alerts-mlb', 'MLB'),
+        ('big-bettor-alerts-nba', 'NBA'),
+        ('big-bettor-alerts-nfl', 'NFL'),
+        ('big-bettor-alerts-nhl', 'NHL')
+    ]
     
-    # Create tweets (removed sharp_longshots_tweet)
-    big_bettor_tweet = create_big_bettor_tweet(big_bettor_data)
-    square_bets_tweet = create_square_bets_tweet(square_bets_data)
-    get_rich_quick_tweet = create_get_rich_quick_tweet(get_rich_quick_data)
+    # Collect all tweets to post
+    tweets_to_post = []
+    
+    # Get big bettor alerts for each sport
+    for endpoint, sport_name in sports:
+        sport_data = get_sport_data(endpoint)
+        if sport_data and sport_data.get('big_bettor_alerts'):
+            big_bettor_tweet = create_big_bettor_tweet(sport_data, sport_name)
+            if big_bettor_tweet:
+                tweets_to_post.append((big_bettor_tweet, f"{sport_name} Big Bettor Alerts"))
     
     # Post tweets with delays
     successful_posts = 0
-    total_attempts = 0
+    total_attempts = len(tweets_to_post)
     
-    tweets_to_post = [
-        (big_bettor_tweet, "Big Bettor Alerts"),
-        (square_bets_tweet, "Square Bets"),
-        (get_rich_quick_tweet, "Get Rich Quick")
-    ]
-    
-    for tweet_text, tweet_type in tweets_to_post:
-        if tweet_text:  # Only count actual tweets
-            total_attempts += 1
-            
+    for i, (tweet_text, tweet_type) in enumerate(tweets_to_post):
         if post_to_twitter(client, tweet_text, tweet_type):
-            if tweet_text:  # Only count successful actual posts
-                successful_posts += 1
+            successful_posts += 1
         
         # Wait between tweets (except after the last one)
-        if tweet_text and tweets_to_post.index((tweet_text, tweet_type)) < len(tweets_to_post) - 1:
+        if i < len(tweets_to_post) - 1:
             print("⏱️ Waiting 60 seconds before next tweet...")
             time.sleep(60)
     
