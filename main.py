@@ -52,10 +52,20 @@ def get_sport_data(endpoint):
         response.raise_for_status()
         data = response.json()
         
+        # Determine the correct key based on the endpoint
+        sport_key_map = {
+            'big-bettor-alerts-mlb': 'big_bettor_alerts_mlb',
+            'big-bettor-alerts-nba': 'big_bettor_alerts_nba', 
+            'big-bettor-alerts-nfl': 'big_bettor_alerts_nfl',
+            'big-bettor-alerts-nhl': 'big_bettor_alerts_nhl'
+        }
+        
+        alerts_key = sport_key_map.get(endpoint, 'big_bettor_alerts')
+        
         # Filter picks based on 30% rule (handle% must be 30% higher than bets%)
-        if data and data.get('big_bettor_alerts'):
+        if data and data.get(alerts_key):
             filtered_picks = []
-            for pick in data['big_bettor_alerts']:
+            for pick in data[alerts_key]:
                 try:
                     handle_pct = int(pick['handle_pct'].replace('%', ''))
                     bets_pct = int(pick['bets_pct'].replace('%', ''))
@@ -71,7 +81,11 @@ def get_sport_data(endpoint):
                 reverse=True
             )
             
+            # Update the data with filtered picks using the standardized key
             data['big_bettor_alerts'] = filtered_picks
+        else:
+            # If no data found, set empty list
+            data['big_bettor_alerts'] = []
         
         pick_count = len(data.get('big_bettor_alerts', []))
         print(f"✅ Got {pick_count} qualifying picks from {endpoint}")
