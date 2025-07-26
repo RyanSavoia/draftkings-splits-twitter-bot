@@ -125,11 +125,11 @@ def create_big_bettor_tweet(data, sport):
     
     lines = []
     
-    # Dynamic header based on count
+    # Dynamic header based on count - changed from "games" to "bets"
     if pick_count == 1:
-        lines.append(f"{emoji} This {sport} game has big money backing it today")
+        lines.append(f"{emoji} This {sport} bet has big money backing it today")
     else:
-        lines.append(f"{emoji} {pick_count} {sport} games with big money backing them today")
+        lines.append(f"{emoji} {pick_count} {sport} bets with big money backing them today")
     
     lines.append("")
     
