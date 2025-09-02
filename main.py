@@ -42,6 +42,53 @@ def setup_twitter_api():
         print(f"❌ Error setting up Twitter API: {e}")
         return None
 
+def test_twitter_basic_functionality(client):
+    """Test if basic Twitter functionality works"""
+    try:
+        print("\n🧪 TESTING BASIC TWITTER FUNCTIONALITY...")
+        
+        # Test 1: Get account info
+        me = client.get_me()
+        print(f"✅ Account access works: @{me.data.username}")
+        
+        # Test 2: Try posting a simple, non-controversial tweet
+        test_tweet_text = f"API test - {datetime.now().strftime('%H:%M:%S')} 🤖"
+        test_response = client.create_tweet(text=test_tweet_text)
+        print(f"✅ Basic tweet posted successfully: {test_response.data['id']}")
+        
+        # Wait a moment then clean up
+        time.sleep(5)
+        client.delete_tweet(test_response.data['id'])
+        print("✅ Test tweet deleted successfully")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Basic Twitter functionality failed: {e}")
+        print("This means there's an authentication or account permission issue.")
+        return False
+
+def test_betting_content(client):
+    """Test if betting-related content is the issue"""
+    try:
+        print("\n🎰 TESTING BETTING CONTENT...")
+        
+        # Test with mild betting language
+        betting_tweet = "Testing sports content: Team A vs Team B prediction 🏈"
+        test_response = client.create_tweet(text=betting_tweet)
+        print(f"✅ Mild sports content works: {test_response.data['id']}")
+        
+        time.sleep(5)
+        client.delete_tweet(test_response.data['id'])
+        print("✅ Sports test tweet deleted")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Sports content failed: {e}")
+        print("This suggests content-related restrictions.")
+        return False
+
 def get_sport_data(endpoint):
     """Fetch data from DraftKings API endpoint for specific sport"""
     try:
@@ -110,8 +157,52 @@ def get_sport_emoji(sport):
     }
     return emojis.get(sport, '💰')
 
+def create_big_bettor_tweet_sanitized(data, sport):
+    """Create a sanitized version of the tweet without gambling terms"""
+    if not data or not data.get('big_bettor_alerts'):
+        return None
+    
+    picks = data['big_bettor_alerts']
+    
+    if not picks:
+        return None
+    
+    emoji = get_sport_emoji(sport)
+    pick_count = len(picks)
+    
+    lines = []
+    
+    # Sanitized header - removed gambling terms
+    if pick_count == 1:
+        lines.append(f"{emoji} This {sport} selection has smart money backing it today")
+    else:
+        lines.append(f"{emoji} {pick_count} {sport} selections with smart money backing them today")
+    
+    lines.append("")
+    lines.append("📊 For entertainment purposes only")
+    lines.append("")
+    
+    for pick in picks:
+        handle_pct = pick['handle_pct']
+        bets_pct = pick['bets_pct']
+        team = pick['team']
+        odds = pick['odds'].replace('−', '-')
+        game_time = pick['game_time'].split(', ')[1]  # Get just the time part
+        game_title = pick['game_title']
+        
+        lines.append(f"{team} {odds} ({game_title})")
+        lines.append(f"🎫 Public: {bets_pct} / 💰 Money: {handle_pct}")
+        lines.append(f"⏰ {game_time}")
+        lines.append("")
+    
+    lines.append("Drop a ❤️ if you find this interesting!")
+    lines.append("")
+    lines.append("#Sports #Analytics #Entertainment")
+    
+    return '\n'.join(lines)
+
 def create_big_bettor_tweet(data, sport):
-    """Create tweet for big bettor alerts for specific sport"""
+    """Create tweet for big bettor alerts for specific sport (original version)"""
     if not data or not data.get('big_bettor_alerts'):
         return None
     
@@ -150,38 +241,6 @@ def create_big_bettor_tweet(data, sport):
     
     return '\n'.join(lines)
 
-def create_square_bets_tweet(data):
-    """Create tweet for biggest square bets (keeping original functionality)"""
-    if not data or not data.get('biggest_square_bets'):
-        return None
-    
-    picks = data['biggest_square_bets']
-    
-    if not picks:
-        return None
-    
-    lines = []
-    lines.append("🤡 BIGGEST SQUARE BETS 🤡 (fade these)")
-    lines.append("Lots of squares but not a lot of dollars, take the opposite of these bets!")
-    lines.append("")
-    
-    for i, pick in enumerate(picks, 1):
-        bets_pct = pick['bets_pct']
-        handle_pct = pick['handle_pct']
-        team = pick['team']
-        odds = pick['odds'].replace('−', '-')
-        game_time = pick['game_time'].split(', ')[1]  # Get just the time part
-        game_title = pick['game_title']
-        
-        lines.append(f"{i}. {team} {odds} ({game_title})")
-        lines.append(f"   {bets_pct} of bets but only {handle_pct} of money")
-        lines.append(f"   {game_time}")
-        lines.append("")
-    
-    lines.append("The public loves these bets, but the money doesn't. Contrarian play?")
-    
-    return '\n'.join(lines)
-
 def post_to_twitter(client, text, tweet_type):
     """Post tweet to Twitter"""
     try:
@@ -197,7 +256,7 @@ def post_to_twitter(client, text, tweet_type):
         return False
 
 def run_draftkings_tweets():
-    """Main function to generate and post DraftKings tweets"""
+    """Main function to generate and post DraftKings tweets with testing"""
     print(f"\n{'='*50}")
     print(f"Starting DraftKings tweets at {datetime.now()}")
     print(f"{'='*50}")
@@ -207,6 +266,25 @@ def run_draftkings_tweets():
     if not client:
         print("❌ Failed to setup Twitter API")
         return
+    
+    # STEP 1: Test basic functionality
+    if not test_twitter_basic_functionality(client):
+        print("❌ Basic functionality failed - stopping here")
+        return
+    
+    # STEP 2: Test sports content
+    if not test_betting_content(client):
+        print("❌ Sports content failed - this indicates content restrictions")
+        print("🔄 Will try with sanitized content...")
+        use_sanitized = True
+    else:
+        print("✅ Sports content works - will try original content first")
+        use_sanitized = False
+    
+    # STEP 3: Try posting actual content
+    print(f"\n{'='*30}")
+    print("POSTING ACTUAL CONTENT")
+    print(f"{'='*30}")
     
     # Sports to check for big bettor alerts
     sports = [
@@ -223,17 +301,44 @@ def run_draftkings_tweets():
     for endpoint, sport_name in sports:
         sport_data = get_sport_data(endpoint)
         if sport_data and sport_data.get('big_bettor_alerts'):
-            big_bettor_tweet = create_big_bettor_tweet(sport_data, sport_name)
-            if big_bettor_tweet:
-                tweets_to_post.append((big_bettor_tweet, f"{sport_name} Big Bettor Alerts"))
+            if use_sanitized:
+                tweet_text = create_big_bettor_tweet_sanitized(sport_data, sport_name)
+                tweet_type = f"{sport_name} Smart Money Alerts (Sanitized)"
+            else:
+                tweet_text = create_big_bettor_tweet(sport_data, sport_name)
+                tweet_type = f"{sport_name} Big Bettor Alerts (Original)"
+                
+            if tweet_text:
+                tweets_to_post.append((tweet_text, tweet_type))
     
     # Post tweets with delays
     successful_posts = 0
     total_attempts = len(tweets_to_post)
     
     for i, (tweet_text, tweet_type) in enumerate(tweets_to_post):
+        print(f"\n--- Attempting to post {tweet_type} ---")
         if post_to_twitter(client, tweet_text, tweet_type):
             successful_posts += 1
+        else:
+            # If original content failed and we haven't tried sanitized yet
+            if not use_sanitized and "Original" in tweet_type:
+                print("🔄 Original failed, trying sanitized version...")
+                time.sleep(10)
+                
+                # Get the sport name from tweet_type
+                sport_name = tweet_type.split()[0]
+                
+                # Find the corresponding data and create sanitized version
+                for endpoint, s_name in sports:
+                    if s_name == sport_name:
+                        sport_data = get_sport_data(endpoint)
+                        if sport_data and sport_data.get('big_bettor_alerts'):
+                            sanitized_text = create_big_bettor_tweet_sanitized(sport_data, sport_name)
+                            if sanitized_text:
+                                sanitized_type = f"{sport_name} Smart Money Alerts (Sanitized Retry)"
+                                if post_to_twitter(client, sanitized_text, sanitized_type):
+                                    successful_posts += 1
+                        break
         
         # Wait between tweets (except after the last one)
         if i < len(tweets_to_post) - 1:
