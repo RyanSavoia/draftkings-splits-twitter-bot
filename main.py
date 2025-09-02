@@ -158,7 +158,7 @@ def get_sport_emoji(sport):
     return emojis.get(sport, '💰')
 
 def create_big_bettor_tweet_sanitized(data, sport):
-    """Create ultra-minimal version - no odds"""
+    """Create Big Money Alert version"""
     if not data or not data.get('big_bettor_alerts'):
         return None
     
@@ -174,12 +174,13 @@ def create_big_bettor_tweet_sanitized(data, sport):
     
     # Header with sport emoji
     sport_emoji = get_sport_emoji(sport)
-    lines.append(f"{sport_emoji} {sport} Games to Watch")
+    lines.append(f"{sport_emoji} {sport} Big Money Alert")
     lines.append("")
     
     for pick in picks:
         try:
             team = pick['team']
+            odds = pick['odds'].replace('−', '-')
             game_time = pick['game_time'].split(', ')[1]
             
             # Parse game_title to create "Team vs Team" format
@@ -192,7 +193,7 @@ def create_big_bettor_tweet_sanitized(data, sport):
             else:
                 matchup = game_title
             
-            lines.append(f"{team}")
+            lines.append(f"{team} {odds}")
             lines.append(f"{matchup}")
             lines.append(f"{game_time}")
             lines.append("")
@@ -200,7 +201,7 @@ def create_big_bettor_tweet_sanitized(data, sport):
         except (ValueError, KeyError):
             continue
     
-    lines.append("Interesting matchups today")
+    lines.append("Big money on these 📊")
     
     return '\n'.join(lines)
 
