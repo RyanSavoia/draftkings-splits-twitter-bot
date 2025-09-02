@@ -158,7 +158,7 @@ def get_sport_emoji(sport):
     return emojis.get(sport, '💰')
 
 def create_big_bettor_tweet_sanitized(data, sport):
-    """Create Sharp Action Alert version"""
+    """Create ultra-minimal version - no odds"""
     if not data or not data.get('big_bettor_alerts'):
         return None
     
@@ -174,32 +174,16 @@ def create_big_bettor_tweet_sanitized(data, sport):
     
     # Header with sport emoji
     sport_emoji = get_sport_emoji(sport)
-    lines.append(f"{sport_emoji} {sport} Sharp Action Alert")
+    lines.append(f"{sport_emoji} {sport} Games to Watch")
     lines.append("")
     
     for pick in picks:
         try:
-            handle_pct = int(pick['handle_pct'].replace('%', ''))
-            bets_pct = int(pick['bets_pct'].replace('%', ''))
-            difference = handle_pct - bets_pct
-            
-            # Determine tier based on difference
-            if difference >= 50:
-                tier = "Heavy Position"
-            elif difference >= 40:
-                tier = "Strong Lean"
-            elif difference >= 30:
-                tier = "Sharp Side"
-            else:
-                tier = "Notable"
-            
             team = pick['team']
-            odds = pick['odds'].replace('−', '-')
             game_time = pick['game_time'].split(', ')[1]
             
             # Parse game_title to create "Team vs Team" format
             game_title = pick['game_title']
-            # Extract teams from game_title (assuming format like "Team1 @ Team2" or "Team1 vs Team2")
             if ' @ ' in game_title:
                 teams = game_title.split(' @ ')
                 matchup = f"{teams[0]} vs {teams[1]}"
@@ -208,7 +192,7 @@ def create_big_bettor_tweet_sanitized(data, sport):
             else:
                 matchup = game_title
             
-            lines.append(f"{tier}: {team} {odds}")
+            lines.append(f"{team}")
             lines.append(f"{matchup}")
             lines.append(f"{game_time}")
             lines.append("")
@@ -216,7 +200,7 @@ def create_big_bettor_tweet_sanitized(data, sport):
         except (ValueError, KeyError):
             continue
     
-    lines.append("Sharp money following these sides 📊")
+    lines.append("Interesting matchups today")
     
     return '\n'.join(lines)
 
