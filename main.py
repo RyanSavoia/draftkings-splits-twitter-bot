@@ -320,10 +320,7 @@ def run_draftkings_tweets():
             if tweet_text:
                 tweets_to_post.append((tweet_text, tweet_type))
     
-    # Add MLB prop hit rates tweet
-    mlb_props_tweet = create_mlb_prop_hit_rates_tweet()
-    if mlb_props_tweet:
-        tweets_to_post.append((mlb_props_tweet, "MLB Prop Hit Rates"))
+    # MLB prop hit rates will be sent via email instead of tweeted
     
     # Post tweets with delays
     successful_posts = 0
