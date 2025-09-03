@@ -42,7 +42,15 @@ def create_mlb_prop_hit_rates_tweet():
                                     # Clean up prop title
                                     prop_clean = prop_title.replace(' (Over/Under)', '').replace(' (Yes/No)', '').replace('Batter ', '').replace('Pitcher ', '')
                                     
-                                    prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean}"
+                                    # Format prop type with capital letters
+                                    if prop_type.lower() == "over":
+                                        prop_type_formatted = "O"
+                                    elif prop_type.lower() == "under":
+                                        prop_type_formatted = "U"
+                                    else:
+                                        prop_type_formatted = prop_type.title()
+                                    
+                                    prop_description = f"{player_name} {prop_type_formatted} {opening_line} {prop_clean}"
                                     
                                     all_props.append({
                                         'description': prop_description,
