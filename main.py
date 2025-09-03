@@ -131,7 +131,7 @@ def create_big_bettor_tweet_sanitized(data, sport):
     
     # Header with sport emoji
     sport_emoji = get_sport_emoji(sport)
-    lines.append(f"{sport_emoji} {sport} Big Money Alert")
+    lines.append(f"{sport_emoji} big money is ACTIVE in the {sport} today")
     lines.append("")
     
     for pick in picks:
