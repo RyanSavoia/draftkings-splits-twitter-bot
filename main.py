@@ -77,7 +77,9 @@ def create_mlb_prop_hit_rates_tweet():
     
     lines.append("Drop a ❤️ if you're taking any of these!")
     
-    return '\n'.join(lines)import tweepy
+    return '\n'.join(lines)
+
+import tweepy
 import json
 import requests
 from datetime import datetime
