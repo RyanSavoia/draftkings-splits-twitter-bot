@@ -1,8 +1,166 @@
-# Add these functions to your existing main.py file
+import tweepy
+import json
+import requests
+from datetime import datetime
+import os
+import time
+
+# Twitter API credentials from environment variables
+TWITTER_API_KEY = os.getenv('API_KEY')
+TWITTER_API_SECRET = os.getenv('API_SECRET')
+TWITTER_ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
+TWITTER_ACCESS_TOKEN_SECRET = os.getenv('ACCESS_SECRET')
+
+# DraftKings API endpoints
+DRAFTKINGS_BASE_URL = "https://draftkings-splits-scraper-webservice.onrender.com"
 
 # InsideRedge API credentials
 INSIDER_API_KEY = "5c2f9307-ea6c-4a9c-8d8b-b09643a60bfd"
 INSIDER_BASE_URL = "https://commercial.insideredgeanalytics.com/api"
+
+def setup_twitter_api():
+    """Setup Twitter API v2 client"""
+    try:
+        print("🐦 Setting up Twitter API...")
+        
+        required_keys = ['API_KEY', 'API_SECRET', 'ACCESS_TOKEN', 'ACCESS_SECRET']
+        missing_keys = [key for key in required_keys if not os.getenv(key)]
+        
+        if missing_keys:
+            print(f"❌ Missing environment variables: {missing_keys}")
+            return None
+        
+        print("🔑 All API keys found")
+        
+        client = tweepy.Client(
+            consumer_key=TWITTER_API_KEY,
+            consumer_secret=TWITTER_API_SECRET,
+            access_token=TWITTER_ACCESS_TOKEN,
+            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True
+        )
+        
+        print("✅ Twitter API client created successfully")
+        return client
+    except Exception as e:
+        print(f"❌ Error setting up Twitter API: {e}")
+        return None
+
+def get_sport_data(endpoint):
+    """Fetch data from DraftKings API endpoint for specific sport"""
+    try:
+        url = f"{DRAFTKINGS_BASE_URL}/{endpoint}"
+        print(f"🌐 Fetching data from {url}")
+        
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Determine the correct key based on the endpoint
+        sport_key_map = {
+            'big-bettor-alerts-mlb': 'big_bettor_alerts_mlb',
+            'big-bettor-alerts-nba': 'big_bettor_alerts_nba', 
+            'big-bettor-alerts-nfl': 'big_bettor_alerts_nfl',
+            'big-bettor-alerts-nhl': 'big_bettor_alerts_nhl'
+        }
+        
+        alerts_key = sport_key_map.get(endpoint, 'big_bettor_alerts')
+        
+        # Filter picks based on 30% rule (handle% must be 30% higher than bets%)
+        if data and data.get(alerts_key):
+            filtered_picks = []
+            for pick in data[alerts_key]:
+                try:
+                    handle_pct = int(pick['handle_pct'].replace('%', ''))
+                    bets_pct = int(pick['bets_pct'].replace('%', ''))
+                    
+                    if handle_pct >= bets_pct + 30:
+                        filtered_picks.append(pick)
+                except (ValueError, KeyError):
+                    continue  # Skip picks with invalid percentage data
+            
+            # Sort by biggest difference (handle% - bets%)
+            filtered_picks.sort(key=lambda x: 
+                int(x['handle_pct'].replace('%', '')) - int(x['bets_pct'].replace('%', '')), 
+                reverse=True
+            )
+            
+            # Update the data with filtered picks using the standardized key
+            data['big_bettor_alerts'] = filtered_picks
+        else:
+            # If no data found, set empty list
+            data['big_bettor_alerts'] = []
+        
+        pick_count = len(data.get('big_bettor_alerts', []))
+        print(f"✅ Got {pick_count} qualifying picks from {endpoint}")
+        return data
+    except requests.exceptions.Timeout:
+        print(f"⏰ Request timed out for {endpoint}")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"🌐 Network error for {endpoint}: {e}")
+        return None
+    except Exception as e:
+        print(f"❌ Error fetching {endpoint}: {e}")
+        return None
+
+def get_sport_emoji(sport):
+    """Get emoji for sport"""
+    emojis = {
+        'MLB': '⚾',
+        'NBA': '🏀',
+        'NFL': '🏈',
+        'NHL': '🏒'
+    }
+    return emojis.get(sport, '💰')
+
+def create_big_bettor_tweet_sanitized(data, sport):
+    """Create Big Money Alert version"""
+    if not data or not data.get('big_bettor_alerts'):
+        return None
+    
+    picks = data['big_bettor_alerts']
+    
+    if not picks:
+        return None
+    
+    # Limit to top 3-4 picks only
+    picks = picks[:4]
+    
+    lines = []
+    
+    # Header with sport emoji
+    sport_emoji = get_sport_emoji(sport)
+    lines.append(f"{sport_emoji} {sport} Big Money Alert")
+    lines.append("")
+    
+    for pick in picks:
+        try:
+            team = pick['team']
+            odds = pick['odds'].replace('−', '-')
+            game_time = pick['game_time'].split(', ')[1]
+            
+            # Parse game_title to create "Team vs Team" format
+            game_title = pick['game_title']
+            if ' @ ' in game_title:
+                teams = game_title.split(' @ ')
+                matchup = f"{teams[0]} vs {teams[1]}"
+            elif ' vs ' in game_title:
+                matchup = game_title
+            else:
+                matchup = game_title
+            
+            lines.append(f"{team} {odds}")
+            lines.append(f"{matchup}")
+            lines.append(f"{game_time}")
+            lines.append("")
+            
+        except (ValueError, KeyError):
+            continue
+    
+    lines.append("Big money on these 📊")
+    
+    return '\n'.join(lines)
 
 def get_todays_mlb_games():
     """Fetch today's MLB games"""
@@ -115,7 +273,19 @@ def create_mlb_prop_hit_rates_tweet():
     
     return '\n'.join(lines)
 
-# Then modify your main run_draftkings_tweets() function to include MLB props:
+def post_to_twitter(client, text, tweet_type):
+    """Post tweet to Twitter"""
+    try:
+        if not text:
+            print(f"⚠️ No {tweet_type} tweet to post (no qualifying picks)")
+            return True  # Don't count as failure
+        
+        response = client.create_tweet(text=text)
+        print(f"✅ Posted {tweet_type}: {response.data['id']}")
+        return True
+    except Exception as e:
+        print(f"❌ Error posting {tweet_type}: {e}")
+        return False
 
 def run_draftkings_tweets():
     """Main function to generate and post DraftKings tweets"""
@@ -171,216 +341,9 @@ def run_draftkings_tweets():
     
     print(f"\n{'='*50}")
     print(f"✅ Completed: {successful_posts}/{total_attempts} tweets posted")
-    print(f"{'='*50}")import tweepy
-import json
-import requests
-from datetime import datetime
-import os
-import time
-
-# Twitter API credentials from environment variables
-TWITTER_API_KEY = os.getenv('API_KEY')
-TWITTER_API_SECRET = os.getenv('API_SECRET')
-TWITTER_ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
-TWITTER_ACCESS_TOKEN_SECRET = os.getenv('ACCESS_SECRET')
-
-# InsideRedge API
-INSIDER_API_KEY = "5c2f9307-ea6c-4a9c-8d8b-b09643a60bfd"
-INSIDER_BASE_URL = "https://commercial.insideredgeanalytics.com/api"
-
-def setup_twitter_api():
-    """Setup Twitter API v2 client"""
-    try:
-        print("Setting up Twitter API...")
-        
-        required_keys = ['API_KEY', 'API_SECRET', 'ACCESS_TOKEN', 'ACCESS_SECRET']
-        missing_keys = [key for key in required_keys if not os.getenv(key)]
-        
-        if missing_keys:
-            print(f"Missing environment variables: {missing_keys}")
-            return None
-        
-        print("All API keys found")
-        
-        client = tweepy.Client(
-            consumer_key=TWITTER_API_KEY,
-            consumer_secret=TWITTER_API_SECRET,
-            access_token=TWITTER_ACCESS_TOKEN,
-            access_token_secret=TWITTER_ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=True
-        )
-        
-        print("Twitter API client created successfully")
-        return client
-    except Exception as e:
-        print(f"Error setting up Twitter API: {e}")
-        return None
-
-def get_todays_mlb_games():
-    """Fetch today's MLB games"""
-    try:
-        today = datetime.now().strftime('%Y-%m-%d')
-        url = f"{INSIDER_BASE_URL}/mlb/games?from={today}&to={today}"
-        
-        response = requests.get(url, headers={'insider-api-key': INSIDER_API_KEY}, timeout=30)
-        response.raise_for_status()
-        
-        data = response.json()
-        games = data.get('games', [])
-        print(f"Got {len(games)} MLB games for today")
-        return games
-    except Exception as e:
-        print(f"Error fetching MLB games: {e}")
-        return []
-
-def get_player_props(game_id):
-    """Fetch player props for a specific game"""
-    try:
-        url = f"{INSIDER_BASE_URL}/mlb/games/{game_id}/player-props"
-        
-        response = requests.get(url, headers={'insider-api-key': INSIDER_API_KEY}, timeout=30)
-        response.raise_for_status()
-        
-        return response.json()
-    except Exception as e:
-        print(f"Error fetching props for {game_id}: {e}")
-        return None
-
-def create_high_hitrate_props_tweet(games):
-    """Create tweet for MLB props with 70%+ hit rates"""
-    all_props = []
-    
-    for game in games:
-        try:
-            game_id = game['game_id']
-            props_data = get_player_props(game_id)
-            
-            if not props_data or not isinstance(props_data, list):
-                continue
-            
-            # Process each prop category
-            for prop_category in props_data:
-                prop_key = prop_category.get('prop_key', '')
-                prop_title = prop_category.get('title', '')
-                players = prop_category.get('players', [])
-                
-                for player in players:
-                    try:
-                        player_name = player.get('player_name', '')
-                        prop_type = player.get('prop_type', '')
-                        opening_line = player.get('opening_line', 0)
-                        record = player.get('record', {})
-                        
-                        # Skip UNDER props except for strikeouts and pitcher outs
-                        if prop_type == "under" and prop_key not in ["pitcher_strikeouts", "pitcher_outs"]:
-                            continue
-                        
-                        # Handle case where record might be a string representation
-                        if isinstance(record, str):
-                            # Skip string records for now, need to parse them
-                            continue
-                        elif isinstance(record, dict):
-                            hit = record.get('hit', 0)
-                            miss = record.get('miss', 0)
-                            total = record.get('total', 0)
-                            
-                            if total >= 20:  # Minimum sample size
-                                hit_rate = (hit / total) * 100
-                                
-                                if hit_rate >= 70:  # 70%+ hit rate threshold
-                                    # Clean up prop title for readability
-                                    if 'Over/Under' in prop_title:
-                                        prop_clean = prop_title.replace(' (Over/Under)', '').replace('Batter ', '').replace('Pitcher ', '')
-                                    elif 'Yes/No' in prop_title:
-                                        prop_clean = prop_title.replace(' (Yes/No)', '').replace('Pitcher ', '')
-                                    else:
-                                        prop_clean = prop_title
-                                    
-                                    prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean}"
-                                    
-                                    all_props.append({
-                                        'description': prop_description,
-                                        'hit_rate': hit_rate,
-                                        'record': f"{hit}-{miss}",
-                                        'total_games': total
-                                    })
-                                    
-                    except (KeyError, TypeError, ZeroDivisionError):
-                        continue
-                        
-        except Exception as e:
-            print(f"Error processing game {game.get('name', 'Unknown')}: {e}")
-            continue
-    
-    if not all_props:
-        print("No props found with 70%+ hit rates")
-        return None
-    
-    # Sort by hit rate (highest first) and take top 5
-    all_props.sort(key=lambda x: x['hit_rate'], reverse=True)
-    top_props = all_props[:5]
-    
-    lines = []
-    lines.append("These MLB picks have 70%+ hit rates")
-    lines.append("")
-    
-    for i, prop in enumerate(top_props, 1):
-        hit_rate_formatted = f"{prop['hit_rate']:.1f}%"
-        lines.append(f"{i}. {prop['description']}")
-        lines.append(f"   {hit_rate_formatted} ({prop['record']})")
-        lines.append("")
-    
-    lines.append("Historical data speaks.")
-    
-    return '\n'.join(lines)
-
-def post_to_twitter(client, text, tweet_type):
-    """Post tweet to Twitter"""
-    try:
-        if not text:
-            print(f"No {tweet_type} tweet to post (no qualifying data)")
-            return True
-        
-        response = client.create_tweet(text=text)
-        print(f"Posted {tweet_type}: {response.data['id']}")
-        return True
-    except Exception as e:
-        print(f"Error posting {tweet_type}: {e}")
-        return False
-
-def run_mlb_prop_tweets():
-    """Main function to generate and post MLB prop tweets"""
-    print(f"Starting MLB prop tweets at {datetime.now()}")
-    print("="*50)
-    
-    # Setup Twitter
-    client = setup_twitter_api()
-    if not client:
-        print("Failed to setup Twitter API")
-        return
-    
-    # Get today's MLB games
-    games = get_todays_mlb_games()
-    if not games:
-        print("No MLB games found for today")
-        return
-    
-    # Generate high hit rate props tweet
-    props_tweet = create_high_hitrate_props_tweet(games)
-    
-    if props_tweet:
-        success = post_to_twitter(client, props_tweet, "MLB High Hit Rate Props")
-        if success:
-            print("Successfully posted MLB props tweet")
-        else:
-            print("Failed to post MLB props tweet")
-    else:
-        print("No high hit rate props found to tweet")
-    
-    print("="*50)
-    print("Completed MLB prop tweets")
+    print(f"{'='*50}")
 
 if __name__ == "__main__":
-    print("Running MLB Props Hit Rate Bot")
-    run_mlb_prop_tweets()
-    print("Completed - exiting")
+    print("🚀 Running DraftKings Splits Bot")
+    run_draftkings_tweets()
+    print("✅ Completed - exiting")
