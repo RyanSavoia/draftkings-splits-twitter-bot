@@ -1,92 +1,3 @@
-def create_mlb_prop_hit_rates_tweet():
-    """Create tweet for MLB props with 70%+ hit rates"""
-    games = get_todays_mlb_games()
-    if not games:
-        return None
-        
-    all_props = []
-    
-    for game in games:
-        try:
-            game_id = game['game_id']
-            props_data = get_player_props(game_id)
-            
-            if not props_data or not isinstance(props_data, list):
-                continue
-            
-            for prop_category in props_data:
-                prop_key = prop_category.get('prop_key', '')
-                prop_title = prop_category.get('title', '')
-                players = prop_category.get('players', [])
-                
-                for player in players:
-                    try:
-                        player_name = player.get('player_name', '')
-                        prop_type = player.get('prop_type', '')
-                        opening_line = player.get('opening_line', 0)
-                        record = player.get('record', {})
-                        
-                        # Skip UNDER props except for strikeouts and pitcher outs
-                        if prop_type == "under" and prop_key not in ["pitcher_strikeouts", "pitcher_outs"]:
-                            continue
-                        
-                        if isinstance(record, dict):
-                            hit = record.get('hit', 0)
-                            miss = record.get('miss', 0)
-                            total = record.get('total', 0)
-                            
-                            if total >= 20:  # Minimum sample size
-                                hit_rate = (hit / total) * 100
-                                
-                                if hit_rate >= 70:  # 70%+ hit rate threshold
-                                    # Clean up prop title
-                                    prop_clean = prop_title.replace(' (Over/Under)', '').replace(' (Yes/No)', '').replace('Batter ', '').replace('Pitcher ', '')
-                                    
-                                    # Format prop type with capital letters
-                                    if prop_type.lower() == "over":
-                                        prop_type_formatted = "O"
-                                    elif prop_type.lower() == "under":
-                                        prop_type_formatted = "U"
-                                    else:
-                                        prop_type_formatted = prop_type.title()
-                                    
-                                    prop_description = f"{player_name} {prop_type_formatted} {opening_line} {prop_clean}"
-                                    
-                                    all_props.append({
-                                        'description': prop_description,
-                                        'hit_rate': hit_rate,
-                                        'record': f"{hit}-{miss}"
-                                    })
-                                    
-                    except (KeyError, TypeError, ZeroDivisionError):
-                        continue
-                        
-        except Exception as e:
-            print(f"❌ Error processing game {game.get('name', 'Unknown')}: {e}")
-            continue
-    
-    if not all_props:
-        print("⚠️ No MLB props found with 70%+ hit rates")
-        return None
-    
-    # Sort by hit rate and take top 5
-    all_props.sort(key=lambda x: x['hit_rate'], reverse=True)
-    top_props = all_props[:5]
-    
-    lines = []
-    lines.append("These MLB locks have 70%+ hit rates")
-    lines.append("")
-    
-    for i, prop in enumerate(top_props, 1):
-        hit_rate_formatted = f"{prop['hit_rate']:.1f}%"
-        lines.append(f"{i}. {prop['description']}")
-        lines.append(f"   {hit_rate_formatted} ({prop['record']})")
-        lines.append("")
-    
-    lines.append("Drop a ❤️ if you're taking any of these!")
-    
-    return '\n'.join(lines)
-
 import tweepy
 import json
 import requests
@@ -225,11 +136,14 @@ def create_big_bettor_tweet_sanitized(data, sport):
     
     for pick in picks:
         try:
+            handle_pct = pick['handle_pct']
+            bets_pct = pick['bets_pct']
             team = pick['team']
             odds = pick['odds'].replace('−', '-')
             game_time = pick['game_time'].split(', ')[1]
             
             lines.append(f"{team} {odds}")
+            lines.append(f"🎫 {bets_pct} / 💰 {handle_pct}")
             lines.append(f"{game_time}")
             lines.append("")
             
@@ -314,7 +228,15 @@ def create_mlb_prop_hit_rates_tweet():
                                     # Clean up prop title
                                     prop_clean = prop_title.replace(' (Over/Under)', '').replace(' (Yes/No)', '').replace('Batter ', '').replace('Pitcher ', '')
                                     
-                                    prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean}"
+                                    # Format prop type with capital letters
+                                    if prop_type.lower() == "over":
+                                        prop_type_formatted = "O"
+                                    elif prop_type.lower() == "under":
+                                        prop_type_formatted = "U"
+                                    else:
+                                        prop_type_formatted = prop_type.title()
+                                    
+                                    prop_description = f"{player_name} {prop_type_formatted} {opening_line} {prop_clean}"
                                     
                                     all_props.append({
                                         'description': prop_description,
@@ -338,7 +260,7 @@ def create_mlb_prop_hit_rates_tweet():
     top_props = all_props[:5]
     
     lines = []
-    lines.append("These MLB picks have 70%+ hit rates")
+    lines.append("⚾ 70%+ hit rates in the MLB today")
     lines.append("")
     
     for i, prop in enumerate(top_props, 1):
@@ -347,7 +269,7 @@ def create_mlb_prop_hit_rates_tweet():
         lines.append(f"   {hit_rate_formatted} ({prop['record']})")
         lines.append("")
     
-    lines.append("Use these for your lays.")
+    lines.append("Drop a ❤️ if you're taking any of these!")
     
     return '\n'.join(lines)
 
