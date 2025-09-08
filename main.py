@@ -562,8 +562,28 @@ def create_mlb_prop_hit_rates_tweet():
     
     for i, prop in enumerate(top_props, 1):
         hit_rate_formatted = f"{prop['hit_rate']:.1f}%"
-        lines.append(f"{i}. {prop['description'].split(' ', 1)[0]}")  # Just the player name
-        lines.append(f"   - {prop['description'].split(' ', 1)[1]}")  # The prop part with dash
+        # Split at the first occurrence of a number or "less than" to separate name from prop
+        desc = prop['description']
+        
+        # Find where the prop part starts (after player name)
+        import re
+        match = re.search(r'(\d+\+|less than)', desc)
+        if match:
+            player_name = desc[:match.start()].strip()
+            prop_part = desc[match.start():].strip()
+        else:
+            # Fallback: assume first two words are name
+            parts = desc.split(' ', 2)
+            if len(parts) >= 3:
+                player_name = f"{parts[0]} {parts[1]}"
+                prop_part = ' '.join(parts[2:])
+            else:
+                player_name = desc
+                prop_part = ""
+        
+        lines.append(f"{i}. {player_name}")
+        if prop_part:
+            lines.append(f"   - {prop_part}")
         lines.append(f"   {hit_rate_formatted} ({prop['record']})")
         lines.append("")
     
