@@ -520,15 +520,20 @@ def create_mlb_prop_hit_rates_tweet():
                                     # Clean up prop title
                                     prop_clean = prop_title.replace(' (Over/Under)', '').replace(' (Yes/No)', '').replace('Batter ', '').replace('Pitcher ', '')
                                     
-                                    # Format prop type with capital letters
+                                    # Format prop description to avoid betting terminology
                                     if prop_type.lower() == "over":
-                                        prop_type_formatted = "O"
+                                        if opening_line == 0.5:
+                                            prop_description = f"{player_name} 1+ {prop_clean}"
+                                        else:
+                                            # For non-0.5 lines, use "more than" format
+                                            target_number = int(opening_line + 0.5) if opening_line % 1 == 0.5 else int(opening_line + 1)
+                                            prop_description = f"{player_name} {target_number}+ {prop_clean}"
                                     elif prop_type.lower() == "under":
-                                        prop_type_formatted = "U"
+                                        # For unders, use "less than" format
+                                        target_number = int(opening_line)
+                                        prop_description = f"{player_name} less than {target_number} {prop_clean}"
                                     else:
-                                        prop_type_formatted = prop_type.title()
-                                    
-                                    prop_description = f"{player_name} {prop_type_formatted} {opening_line} {prop_clean}"
+                                        prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean}"
                                     
                                     all_props.append({
                                         'description': prop_description,
