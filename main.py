@@ -114,36 +114,7 @@ def get_sport_emoji(sport):
     }
     return emojis.get(sport, '💰')
 
-def create_big_bettor_tweet_sanitized(data, sport):
-    """Create Big Money Alert version - FIXED date filtering"""
-    if not data or not data.get('big_bettor_alerts'):
-        return None
-    
-    picks = data['big_bettor_alerts']
-    
-    if not picks:
-        return None
-    
-    # Get current date in multiple possible formats for matching
-    now = datetime.now()
-    today_formats = [
-        now.strftime('%a, %b %d'),      # "Sun, Sep 08"
-        now.strftime('%a, %b %d').replace(' 0', ' '),  # "Sun, Sep 8" (no leading zero)
-        now.strftime('%a, %B %d'),      # "Sun, September 08"  
-        now.strftime('%a, %B %d').replace(' 0', ' '),  # "Sun, September 8" (no leading zero)
-    ]
-    
-    print(f"🔍 Looking for games on: {today_formats}")
-    
-    todays_picks = []
-    
-    for pick in picks:
-        try:
-            game_time_full = pick.get('game_time', '')
-            print(f"🔍 Checking game time: {game_time_full}")
-            
-            # Split by comma and get the date part
-            if ', ' in game_time_full:
+
                 game_date_str = game_time_full.split(', ')[0] + ', ' + game_time_full.split(', ')[1]
                 # Remove year if present (e.g., "Sun, Sep 8 2024" -> "Sun, Sep 8")
                 if len(game_time_full.split(', ')) > 2:
@@ -267,8 +238,8 @@ def get_referee_stats(game_id):
         print(f"❌ Error fetching referee stats for {game_id}: {e}")
         return None
 
-def analyze_referee_over_under_edge(ref_stats):
-    """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria - FIXED function signature"""
+def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
+    """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria - FIXED to use actual game context"""
     if not ref_stats or 'referee_odds' not in ref_stats or 'over_under' not in ref_stats['referee_odds']:
         return None
     
@@ -304,8 +275,8 @@ def analyze_referee_over_under_edge(ref_stats):
             'roi': round(abs(over_roi), 1)
         })
     
-    # Check home favorite
-    if 'home_favorite' in main_ou:
+    # FIXED: Only check home favorite stats if home team is actually favored
+    if is_home_favored and 'home_favorite' in main_ou:
         home_fav = main_ou['home_favorite']
         hf_roi = home_fav.get('roi', 0)
         if abs(hf_roi) >= 5:
@@ -315,14 +286,14 @@ def analyze_referee_over_under_edge(ref_stats):
             record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
             
             qualifying_criteria.append({
-                'description': "When the home team's favored?",
+                'description': "When the home team's favored",
                 'side': side,
                 'record': record,
                 'roi': round(abs(hf_roi), 1)
             })
     
-    # Check home underdog
-    if 'home_underdog' in main_ou:
+    # FIXED: Only check home underdog stats if home team is actually underdog
+    if is_home_favored is False and 'home_underdog' in main_ou:
         home_dog = main_ou['home_underdog']
         hd_roi = home_dog.get('roi', 0)
         if abs(hd_roi) >= 5:
@@ -332,7 +303,7 @@ def analyze_referee_over_under_edge(ref_stats):
             record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
             
             qualifying_criteria.append({
-                'description': "When the home team's an underdog?",
+                'description': "When the home team's an underdog",
                 'side': side,
                 'record': record,
                 'roi': round(abs(hd_roi), 1)
@@ -347,7 +318,7 @@ def analyze_referee_over_under_edge(ref_stats):
         record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
         
         qualifying_criteria.append({
-            'description': 'When in-conference?',
+            'description': 'When in-conference',
             'side': side,
             'record': record,
             'roi': round(abs(conf_roi), 1)
@@ -371,7 +342,7 @@ def analyze_referee_over_under_edge(ref_stats):
         record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
         
         qualifying_criteria.append({
-            'description': f'When total is between {range_text}?',
+            'description': f'When total is between {range_text}',
             'side': side,
             'record': record,
             'roi': round(abs(range_roi), 1)
