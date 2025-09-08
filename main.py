@@ -186,6 +186,23 @@ def get_todays_mlb_games():
         print(f"❌ Error fetching MLB games: {e}")
         return []
 
+def get_todays_nfl_games():
+    """Fetch today's NFL games"""
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        url = f"{INSIDER_BASE_URL}/nfl/games?from={today}&to={today}"
+        
+        response = requests.get(url, headers={'insider-api-key': INSIDER_API_KEY}, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        games = data.get('games', [])
+        print(f"✅ Got {len(games)} NFL games for today")
+        return games
+    except Exception as e:
+        print(f"❌ Error fetching NFL games: {e}")
+        return []
+
 def get_player_props(game_id):
     """Fetch player props for a specific game"""
     try:
@@ -198,6 +215,230 @@ def get_player_props(game_id):
     except Exception as e:
         print(f"❌ Error fetching props for {game_id}: {e}")
         return None
+
+def get_referee_stats(game_id):
+    """Fetch referee stats for a specific NFL game"""
+    try:
+        url = f"{INSIDER_BASE_URL}/nfl/games/{game_id}/referee-stats"
+        
+        response = requests.get(url, headers={'insider-api-key': INSIDER_API_KEY}, timeout=30)
+        response.raise_for_status()
+        
+        return response.json()
+    except Exception as e:
+        print(f"❌ Error fetching referee stats for {game_id}: {e}")
+        return None
+
+def analyze_referee_over_under_edge(ref_stats):
+    """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria"""
+    if not ref_stats or 'over_under' not in ref_stats:
+        return None
+    
+    ou_data = ref_stats['over_under']
+    qualifying_criteria = []
+    
+    # Check all available criteria for 5%+ ROI
+    criteria_to_check = [
+        ('over_under', 'Overall'),
+        ('conference', 'When in-conference'),
+        ('over_under_range', 'When total in range'),
+    ]
+    
+    # Check nested over_under stats for home favorite/underdog
+    if 'over_under' in ou_data:
+        nested_ou = ou_data['over_under']
+        if 'home_favorite' in nested_ou:
+            home_fav = nested_ou['home_favorite']
+            if home_fav.get('roi', 0) >= 5:
+                wins = home_fav.get('wins', 0)
+                losses = home_fav.get('losses', 0)
+                roi = home_fav.get('roi', 0)
+                
+                # Determine if this favors OVER or UNDER based on the context
+                # If ROI is positive for home_favorite, it means UNDER is profitable when home is favored
+                qualifying_criteria.append({
+                    'description': 'When home favored',
+                    'side': 'UNDER',
+                    'record': f"{wins}-{losses}",
+                    'roi': roi
+                })
+        
+        if 'home_underdog' in nested_ou:
+            home_dog = nested_ou['home_underdog']
+            if home_dog.get('roi', 0) >= 5:
+                wins = home_dog.get('wins', 0)
+                losses = home_dog.get('losses', 0)
+                roi = home_dog.get('roi', 0)
+                
+                qualifying_criteria.append({
+                    'description': 'When home underdog',
+                    'side': 'UNDER',
+                    'record': f"{wins}-{losses}",
+                    'roi': roi
+                })
+    
+    # Check main over_under stats
+    if 'over_under' in ou_data:
+        main_ou = ou_data['over_under']
+        over_roi = main_ou.get('over_roi', 0)
+        under_roi = main_ou.get('under_roi', 0)
+        
+        if over_roi >= 5:
+            over_hits = main_ou.get('over_hits', 0)
+            under_hits = main_ou.get('under_hits', 0)
+            qualifying_criteria.append({
+                'description': 'Overall',
+                'side': 'OVER',
+                'record': f"{over_hits}-{under_hits}",
+                'roi': over_roi
+            })
+        elif under_roi >= 5:
+            over_hits = main_ou.get('over_hits', 0)
+            under_hits = main_ou.get('under_hits', 0)
+            qualifying_criteria.append({
+                'description': 'Overall',
+                'side': 'UNDER',
+                'record': f"{under_hits}-{over_hits}",
+                'roi': under_roi
+            })
+    
+    # Check conference stats
+    if 'conference' in ou_data:
+        conf = ou_data['conference']
+        conf_roi = conf.get('in_conf_net_roi', 0)
+        if abs(conf_roi) >= 5:  # Could be negative, indicating OVER edge
+            wins = conf.get('in_conf_wins', 0)
+            losses = conf.get('in_conf_losses', 0)
+            
+            side = 'UNDER' if conf_roi > 0 else 'OVER'
+            roi_value = abs(conf_roi)
+            
+            qualifying_criteria.append({
+                'description': 'When in-conference',
+                'side': side,
+                'record': f"{wins}-{losses}" if side == 'UNDER' else f"{losses}-{wins}",
+                'roi': roi_value
+            })
+    
+    # Check over_under_range
+    if 'over_under_range' in ou_data:
+        ou_range = ou_data['over_under_range']
+        range_roi = ou_range.get('ou_range_roi', 0)
+        if abs(range_roi) >= 5:
+            wins = ou_range.get('ou_range_wins', 0)
+            losses = ou_range.get('ou_range_losses', 0)
+            total_range = ou_range.get('ou_range', 'range')
+            
+            side = 'UNDER' if range_roi > 0 else 'OVER'
+            roi_value = abs(range_roi)
+            
+            qualifying_criteria.append({
+                'description': f'When total {total_range}',
+                'side': side,
+                'record': f"{wins}-{losses}" if side == 'UNDER' else f"{losses}-{wins}",
+                'roi': roi_value
+            })
+    
+    # Need at least 3 criteria with 5%+ ROI
+    if len(qualifying_criteria) < 3:
+        return None
+    
+    # Sort by ROI descending
+    qualifying_criteria.sort(key=lambda x: x['roi'], reverse=True)
+    
+    # Determine the dominant side (most criteria should agree)
+    side_count = {}
+    for criteria in qualifying_criteria:
+        side = criteria['side']
+        side_count[side] = side_count.get(side, 0) + 1
+    
+    dominant_side = max(side_count.items(), key=lambda x: x[1])[0]
+    
+    return {
+        'side': dominant_side,
+        'criteria': qualifying_criteria[:3],  # Top 3 by ROI
+        'total_qualifying': len(qualifying_criteria)
+    }
+
+def create_referee_tweet():
+    """Create referee report tweet for NFL games"""
+    games = get_todays_nfl_games()
+    if not games:
+        print("⚠️ No NFL games found for today")
+        return None
+    
+    game_edges = []
+    
+    for game in games:
+        try:
+            game_id = game['game_id']
+            home_team = game.get('home_team', '')
+            away_team = game.get('away_team', '')
+            
+            ref_stats = get_referee_stats(game_id)
+            if not ref_stats:
+                continue
+            
+            # Get referee name
+            referee_name = ref_stats.get('referee_name', 'Unknown Referee')
+            
+            edge_analysis = analyze_referee_over_under_edge(ref_stats)
+            if edge_analysis:
+                # Calculate max ROI for sorting
+                max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
+                
+                game_edges.append({
+                    'game_id': game_id,
+                    'matchup': f"{away_team} @ {home_team}",
+                    'referee': referee_name,
+                    'side': edge_analysis['side'],
+                    'criteria': edge_analysis['criteria'],
+                    'max_roi': max_roi
+                })
+                
+        except Exception as e:
+            print(f"❌ Error processing referee stats for game {game.get('name', 'Unknown')}: {e}")
+            continue
+    
+    if not game_edges:
+        print("⚠️ No NFL games found with significant referee edges")
+        return None
+    
+    # Sort by max ROI and limit to top 5
+    game_edges.sort(key=lambda x: x['max_roi'], reverse=True)
+    game_edges = game_edges[:5]
+    
+    lines = []
+    
+    # Single game vs multiple games logic
+    if len(game_edges) == 1:
+        game = game_edges[0]
+        lines.append(f"🏈 Referee Report: Take this {game['side']}!")
+        lines.append("")
+        lines.append(f"{game['referee']} ({game['matchup']}):")
+        lines.append(game['side'])
+        
+        for criteria in game['criteria']:
+            lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+        
+    else:
+        lines.append("🏈 Referee Report: Take these totals!")
+        
+        for game in game_edges:
+            lines.append("")
+            lines.append(f"{game['referee']} ({game['matchup']}):")
+            lines.append(game['side'])
+            
+            for criteria in game['criteria']:
+                lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+    
+    return '\n'.join(lines)
 
 def create_mlb_prop_hit_rates_tweet():
     """Create tweet for MLB props with 70%+ hit rates"""
@@ -339,6 +580,11 @@ def run_draftkings_tweets():
     mlb_props_tweet = create_mlb_prop_hit_rates_tweet()
     if mlb_props_tweet:
         tweets_to_post.append((mlb_props_tweet, "MLB Prop Hit Rates"))
+    
+    # Add NFL referee report tweet
+    nfl_referee_tweet = create_referee_tweet()
+    if nfl_referee_tweet:
+        tweets_to_post.append((nfl_referee_tweet, "NFL Referee Report"))
     
     # Post tweets with delays
     successful_posts = 0
