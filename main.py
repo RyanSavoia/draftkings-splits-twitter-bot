@@ -231,113 +231,113 @@ def get_referee_stats(game_id):
 
 def analyze_referee_over_under_edge(ref_stats):
     """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria"""
-    if not ref_stats or 'over_under' not in ref_stats:
+    if not ref_stats or 'referee_odds' not in ref_stats or 'over_under' not in ref_stats['referee_odds']:
         return None
     
-    ou_data = ref_stats['over_under']
+    ou_data = ref_stats['referee_odds']['over_under']
     qualifying_criteria = []
     
-    # Check all available criteria for 5%+ ROI
-    criteria_to_check = [
-        ('over_under', 'Overall'),
-        ('conference', 'When in-conference'),
-        ('over_under_range', 'When total in range'),
-    ]
+    # Get main sections
+    main_ou = ou_data.get('over_under', {})
+    conf = ou_data.get('conference', {})
+    range_data = ou_data.get('over_under_range', {})
     
-    # Check nested over_under stats for home favorite/underdog
-    if 'over_under' in ou_data:
-        nested_ou = ou_data['over_under']
-        if 'home_favorite' in nested_ou:
-            home_fav = nested_ou['home_favorite']
-            if home_fav.get('roi', 0) >= 5:
-                wins = home_fav.get('wins', 0)
-                losses = home_fav.get('losses', 0)
-                roi = home_fav.get('roi', 0)
-                
-                # Determine if this favors OVER or UNDER based on the context
-                # If ROI is positive for home_favorite, it means UNDER is profitable when home is favored
-                qualifying_criteria.append({
-                    'description': 'When home favored',
-                    'side': 'UNDER',
-                    'record': f"{wins}-{losses}",
-                    'roi': roi
-                })
-        
-        if 'home_underdog' in nested_ou:
-            home_dog = nested_ou['home_underdog']
-            if home_dog.get('roi', 0) >= 5:
-                wins = home_dog.get('wins', 0)
-                losses = home_dog.get('losses', 0)
-                roi = home_dog.get('roi', 0)
-                
-                qualifying_criteria.append({
-                    'description': 'When home underdog',
-                    'side': 'UNDER',
-                    'record': f"{wins}-{losses}",
-                    'roi': roi
-                })
+    # Check overall UNDER ROI
+    under_roi = main_ou.get('under_roi', 0)
+    if under_roi >= 5:
+        under_hits = main_ou.get('under_hits', 0)
+        over_hits = main_ou.get('over_hits', 0)
+        qualifying_criteria.append({
+            'description': 'Overall',
+            'side': 'UNDER',
+            'record': f"{under_hits}-{over_hits}",
+            'roi': round(under_roi, 1)
+        })
     
-    # Check main over_under stats
-    if 'over_under' in ou_data:
-        main_ou = ou_data['over_under']
-        over_roi = main_ou.get('over_roi', 0)
-        under_roi = main_ou.get('under_roi', 0)
-        
-        if over_roi >= 5:
-            over_hits = main_ou.get('over_hits', 0)
-            under_hits = main_ou.get('under_hits', 0)
-            qualifying_criteria.append({
-                'description': 'Overall',
-                'side': 'OVER',
-                'record': f"{over_hits}-{under_hits}",
-                'roi': over_roi
-            })
-        elif under_roi >= 5:
-            over_hits = main_ou.get('over_hits', 0)
-            under_hits = main_ou.get('under_hits', 0)
-            qualifying_criteria.append({
-                'description': 'Overall',
-                'side': 'UNDER',
-                'record': f"{under_hits}-{over_hits}",
-                'roi': under_roi
-            })
+    # Check overall OVER ROI
+    over_roi = main_ou.get('over_roi', 0)
+    if abs(over_roi) >= 5 and over_roi > 0:
+        over_hits = main_ou.get('over_hits', 0)
+        under_hits = main_ou.get('under_hits', 0)
+        qualifying_criteria.append({
+            'description': 'Overall',
+            'side': 'OVER',
+            'record': f"{over_hits}-{under_hits}",
+            'roi': round(abs(over_roi), 1)
+        })
     
-    # Check conference stats
-    if 'conference' in ou_data:
-        conf = ou_data['conference']
-        conf_roi = conf.get('in_conf_net_roi', 0)
-        if abs(conf_roi) >= 5:  # Could be negative, indicating OVER edge
-            wins = conf.get('in_conf_wins', 0)
-            losses = conf.get('in_conf_losses', 0)
-            
-            side = 'UNDER' if conf_roi > 0 else 'OVER'
-            roi_value = abs(conf_roi)
+    # Check home favorite
+    if 'home_favorite' in main_ou:
+        home_fav = main_ou['home_favorite']
+        hf_roi = home_fav.get('roi', 0)
+        if abs(hf_roi) >= 5:
+            wins = home_fav.get('wins', 0)
+            losses = home_fav.get('losses', 0)
+            side = 'OVER' if hf_roi > 0 else 'UNDER'
+            record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
             
             qualifying_criteria.append({
-                'description': 'When in-conference',
+                'description': "When the home team's favored?",
                 'side': side,
-                'record': f"{wins}-{losses}" if side == 'UNDER' else f"{losses}-{wins}",
-                'roi': roi_value
+                'record': record,
+                'roi': round(abs(hf_roi), 1)
             })
+    
+    # Check home underdog
+    if 'home_underdog' in main_ou:
+        home_dog = main_ou['home_underdog']
+        hd_roi = home_dog.get('roi', 0)
+        if abs(hd_roi) >= 5:
+            wins = home_dog.get('wins', 0)
+            losses = home_dog.get('losses', 0)
+            side = 'OVER' if hd_roi > 0 else 'UNDER'
+            record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
+            
+            qualifying_criteria.append({
+                'description': "When the home team's an underdog?",
+                'side': side,
+                'record': record,
+                'roi': round(abs(hd_roi), 1)
+            })
+    
+    # Check conference games
+    conf_roi = conf.get('in_conf_net_roi', 0)
+    if abs(conf_roi) >= 5:
+        wins = conf.get('in_conf_wins', 0)
+        losses = conf.get('in_conf_losses', 0)
+        side = 'OVER' if conf_roi > 0 else 'UNDER'
+        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
+        
+        qualifying_criteria.append({
+            'description': 'When in-conference?',
+            'side': side,
+            'record': record,
+            'roi': round(abs(conf_roi), 1)
+        })
     
     # Check over_under_range
-    if 'over_under_range' in ou_data:
-        ou_range = ou_data['over_under_range']
-        range_roi = ou_range.get('ou_range_roi', 0)
-        if abs(range_roi) >= 5:
-            wins = ou_range.get('ou_range_wins', 0)
-            losses = ou_range.get('ou_range_losses', 0)
-            total_range = ou_range.get('ou_range', 'range')
+    range_roi = range_data.get('ou_range_roi', 0)
+    if abs(range_roi) >= 5:
+        wins = range_data.get('ou_range_wins', 0)
+        losses = range_data.get('ou_range_losses', 0)
+        ou_range = range_data.get('ou_range', 'specified range')
+        
+        # Format range text properly
+        if ou_range and ' to ' in ou_range:
+            range_parts = ou_range.split(' to ')
+            range_text = f"{range_parts[0]} and {range_parts[1]}"
+        else:
+            range_text = ou_range
             
-            side = 'UNDER' if range_roi > 0 else 'OVER'
-            roi_value = abs(range_roi)
-            
-            qualifying_criteria.append({
-                'description': f'When total {total_range}',
-                'side': side,
-                'record': f"{wins}-{losses}" if side == 'UNDER' else f"{losses}-{wins}",
-                'roi': roi_value
-            })
+        side = 'OVER' if range_roi > 0 else 'UNDER'
+        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
+        
+        qualifying_criteria.append({
+            'description': f'When total is between {range_text}?',
+            'side': side,
+            'record': record,
+            'roi': round(abs(range_roi), 1)
+        })
     
     # Need at least 3 criteria with 5%+ ROI
     if len(qualifying_criteria) < 3:
@@ -346,7 +346,7 @@ def analyze_referee_over_under_edge(ref_stats):
     # Sort by ROI descending
     qualifying_criteria.sort(key=lambda x: x['roi'], reverse=True)
     
-    # Determine the dominant side (most criteria should agree)
+    # Determine the dominant side
     side_count = {}
     for criteria in qualifying_criteria:
         side = criteria['side']
