@@ -114,7 +114,29 @@ def get_sport_emoji(sport):
     }
     return emojis.get(sport, '💰')
 
-
+def create_big_bettor_tweet_sanitized(data, sport):
+    """Create tweet text from big bettor data - only includes today's games"""
+    if not data or not data.get('big_bettor_alerts'):
+        return None
+    
+    # Generate all possible today formats to check against
+    today = datetime.now()
+    today_formats = [
+        today.strftime('%a, %b %d'),       # "Mon, Sep 8"
+        today.strftime('%A, %B %d'),       # "Monday, September 8"
+        today.strftime('%a, %b %#d' if os.name == 'nt' else '%a, %b %-d'),  # "Mon, Sep 8" (no leading zero)
+        today.strftime('%A, %B %#d' if os.name == 'nt' else '%A, %B %-d'),  # "Monday, September 8" (no leading zero)
+    ]
+    
+    todays_picks = []
+    
+    # Filter picks for today's games only
+    for pick in data['big_bettor_alerts']:
+        try:
+            game_time_full = pick.get('game_time', '')
+            
+            if ', ' in game_time_full:
+                # Extract date part (e.g., "Sun, Sep 8" from "Sun, Sep 8, 1:05 PM ET")
                 game_date_str = game_time_full.split(', ')[0] + ', ' + game_time_full.split(', ')[1]
                 # Remove year if present (e.g., "Sun, Sep 8 2024" -> "Sun, Sep 8")
                 if len(game_time_full.split(', ')) > 2:
