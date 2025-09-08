@@ -557,7 +557,7 @@ def create_mlb_prop_hit_rates_tweet():
     top_props = all_props[:5]
     
     lines = []
-    lines.append("⚾ 70%+ hit rates in the MLB today")
+    lines.append("⚾ These MLB spots? 70%+ every time")
     lines.append("")
     
     for i, prop in enumerate(top_props, 1):
