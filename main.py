@@ -562,7 +562,8 @@ def create_mlb_prop_hit_rates_tweet():
     
     for i, prop in enumerate(top_props, 1):
         hit_rate_formatted = f"{prop['hit_rate']:.1f}%"
-        lines.append(f"{i}. {prop['description']}")
+        lines.append(f"{i}. {prop['description'].split(' ', 1)[0]}")  # Just the player name
+        lines.append(f"   - {prop['description'].split(' ', 1)[1]}")  # The prop part with dash
         lines.append(f"   {hit_rate_formatted} ({prop['record']})")
         lines.append("")
     
