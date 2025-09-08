@@ -382,7 +382,7 @@ def create_referee_tweet():
             # Get referee name
             referee_name = ref_stats.get('referee_name', 'Unknown Referee')
             
-            edge_analysis = analyze_referee_over_under_edge(ref_stats)
+            edge_analysis = analyze_referee_over_under_edge(ref_stats, game)
             if edge_analysis:
                 # Calculate max ROI for sorting
                 max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
