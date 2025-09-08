@@ -574,11 +574,15 @@ def run_draftkings_tweets():
     for endpoint, sport_name in sports:
         sport_data = get_sport_data(endpoint)
         if sport_data and sport_data.get('big_bettor_alerts'):
+            print(f"🔍 Debug: Found {len(sport_data['big_bettor_alerts'])} {sport_name} picks, attempting to create tweet...")
             tweet_text = create_big_bettor_tweet_sanitized(sport_data, sport_name)
             tweet_type = f"{sport_name} Big Money Alert"
-                
+            
+            print(f"🔍 Debug: Tweet created for {sport_name}: {'Yes' if tweet_text else 'No'}")
             if tweet_text:
                 tweets_to_post.append((tweet_text, tweet_type))
+            else:
+                print(f"⚠️ {sport_name} tweet creation failed - likely date filtering issue")
     
     # Add MLB prop hit rates tweet
     mlb_props_tweet = create_mlb_prop_hit_rates_tweet()
