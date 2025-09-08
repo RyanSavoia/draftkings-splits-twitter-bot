@@ -115,7 +115,7 @@ def get_sport_emoji(sport):
     return emojis.get(sport, '💰')
 
 def create_big_bettor_tweet_sanitized(data, sport):
-    """Create Big Money Alert version"""
+    """Create Big Money Alert version - FIXED date filtering"""
     if not data or not data.get('big_bettor_alerts'):
         return None
     
@@ -124,17 +124,47 @@ def create_big_bettor_tweet_sanitized(data, sport):
     if not picks:
         return None
     
-    # Filter picks to only include today's games
-    today_str = datetime.now().strftime('%a, %b %d')  # Format: "Thu, Sep 05"
+    # Get current date in multiple possible formats for matching
+    now = datetime.now()
+    today_formats = [
+        now.strftime('%a, %b %d'),      # "Sun, Sep 08"
+        now.strftime('%a, %b %d').replace(' 0', ' '),  # "Sun, Sep 8" (no leading zero)
+        now.strftime('%a, %B %d'),      # "Sun, September 08"  
+        now.strftime('%a, %B %d').replace(' 0', ' '),  # "Sun, September 8" (no leading zero)
+    ]
+    
+    print(f"🔍 Looking for games on: {today_formats}")
+    
     todays_picks = []
     
     for pick in picks:
         try:
-            game_date_str = pick.get('game_time', '').split(', ')[0]  # Get date part
-            if game_date_str == today_str:
+            game_time_full = pick.get('game_time', '')
+            print(f"🔍 Checking game time: {game_time_full}")
+            
+            # Split by comma and get the date part
+            if ', ' in game_time_full:
+                game_date_str = game_time_full.split(', ')[0] + ', ' + game_time_full.split(', ')[1]
+                # Remove year if present (e.g., "Sun, Sep 8 2024" -> "Sun, Sep 8")
+                if len(game_time_full.split(', ')) > 2:
+                    game_date_str = game_time_full.split(', ')[0] + ', ' + game_time_full.split(', ')[1]
+            else:
+                game_date_str = game_time_full
+            
+            # Check if this game is today
+            is_today = any(today_format in game_date_str for today_format in today_formats)
+            
+            if is_today:
+                print(f"✅ Found today's game: {game_date_str}")
                 todays_picks.append(pick)
-        except (ValueError, KeyError, IndexError):
+            else:
+                print(f"❌ Not today's game: {game_date_str}")
+                
+        except (ValueError, KeyError, IndexError) as e:
+            print(f"❌ Error parsing game time: {e}")
             continue  # Skip picks with invalid date format
+    
+    print(f"🔍 Found {len(todays_picks)} games for today")
     
     if not todays_picks:
         return None
@@ -155,7 +185,15 @@ def create_big_bettor_tweet_sanitized(data, sport):
             bets_pct = pick['bets_pct']
             team = pick['team']
             odds = pick['odds'].replace('−', '-')
-            game_time = pick['game_time'].split(', ')[1]
+            
+            # Extract just the time from game_time
+            game_time_parts = pick['game_time'].split(', ')
+            if len(game_time_parts) >= 3:
+                game_time = game_time_parts[2]  # Time is usually the third part
+            elif len(game_time_parts) >= 2:
+                game_time = game_time_parts[1]  # Or second part
+            else:
+                game_time = pick['game_time']
             
             lines.append(f"{team} {odds}")
             lines.append(f"🎫 {bets_pct} / 💰 {handle_pct}")
@@ -230,7 +268,7 @@ def get_referee_stats(game_id):
         return None
 
 def analyze_referee_over_under_edge(ref_stats):
-    """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria"""
+    """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria - FIXED function signature"""
     if not ref_stats or 'referee_odds' not in ref_stats or 'over_under' not in ref_stats['referee_odds']:
         return None
     
@@ -361,7 +399,7 @@ def analyze_referee_over_under_edge(ref_stats):
     }
 
 def create_referee_tweet():
-    """Create referee report tweet for NFL games"""
+    """Create referee report tweet for NFL games - FIXED function call"""
     games = get_todays_nfl_games()
     if not games:
         print("⚠️ No NFL games found for today")
@@ -382,7 +420,8 @@ def create_referee_tweet():
             # Get referee name
             referee_name = ref_stats.get('referee_name', 'Unknown Referee')
             
-            edge_analysis = analyze_referee_over_under_edge(ref_stats, game)
+            # FIXED: Removed extra parameter
+            edge_analysis = analyze_referee_over_under_edge(ref_stats)
             if edge_analysis:
                 # Calculate max ROI for sorting
                 max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
@@ -600,6 +639,7 @@ def run_draftkings_tweets():
     
     for i, (tweet_text, tweet_type) in enumerate(tweets_to_post):
         print(f"\n--- Attempting to post {tweet_type} ---")
+        print(f"Tweet content:\n{tweet_text}\n")  # Debug: show tweet content
         if post_to_twitter(client, tweet_text, tweet_type):
             successful_posts += 1
         
