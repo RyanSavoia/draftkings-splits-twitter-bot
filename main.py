@@ -44,7 +44,7 @@ def setup_twitter_api():
         return None
 
 def get_insider_games(sport, days_ahead=0):
-    """Fetch games from InsideRedge API for specified sport - same day only by default"""
+    """Fetch games from InsideRedge API for specified sport"""
     try:
         print(f"🔄 Starting API call for {sport}...")
         today = datetime.now()
@@ -55,14 +55,11 @@ def get_insider_games(sport, days_ahead=0):
 
         url = f"{INSIDER_BASE_URL}/{sport.lower()}/games?from={from_date}&to={to_date}"
         print(f"🌐 Fetching {sport} games from {url}")
-        print(f"🔑 Using API key: {INSIDER_API_KEY[:8]}...")
         
-        # Add shorter timeout and better error handling
-        print("⏱️ Making request with 10 second timeout...")
         response = requests.get(
             url, 
             headers={'insider-api-key': INSIDER_API_KEY}, 
-            timeout=10  # Reduced from 30 to 10 seconds
+            timeout=10
         )
         
         print(f"✅ Got response: {response.status_code}")
@@ -81,36 +78,52 @@ def get_insider_games(sport, days_ahead=0):
         return []
     except requests.exceptions.HTTPError as e:
         print(f"🚫 HTTP ERROR for {sport}: {e}")
-        print(f"Response content: {e.response.text if hasattr(e, 'response') else 'No response content'}")
         return []
     except Exception as e:
         print(f"❌ UNEXPECTED ERROR fetching {sport} games: {e}")
         return []
 
+def get_public_money_data(game_id):
+    """Fetch public money data for a specific game"""
+    try:
+        url = f"{INSIDER_BASE_URL}/mlb/games/{game_id}/public-money"
+        
+        response = requests.get(
+            url, 
+            headers={'insider-api-key': INSIDER_API_KEY}, 
+            timeout=10
+        )
+        
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"❌ Error fetching public money for {game_id}: {e}")
+        return None
+
 def convert_insider_to_big_bettor_format(games, sport):
-    """Convert InsideRedge game data to big bettor alert format - DEBUG VERSION"""
+    """Convert InsideRedge game data to big bettor alert format"""
     big_bettor_alerts = []
     
-    print(f"🔍 DEBUG: Processing {len(games)} {sport} games for big bettor alerts...")
+    print(f"🔍 Processing {len(games)} {sport} games for big bettor alerts...")
     
     for i, game in enumerate(games, 1):
         try:
-            public_money = game.get('public_money_stats', {})
-            odds = game.get('odds', {})
-            
-            # Extract team info
+            game_id = game.get('game_id', '')
             away_team = game.get('away_team', '')
             home_team = game.get('home_team', '')
             game_date = game.get('game_date', '')
+            odds = game.get('odds', {})
             
-            print(f"\n--- Game {i}: {away_team} @ {home_team} ---")
+            print(f"\n--- Game {i}: {away_team} @ {home_team} ({game_id}) ---")
             
-            # Check if we have public money data
+            # Get public money data via separate API call
+            public_money = get_public_money_data(game_id)
+            
             if not public_money:
-                print("❌ No public_money_stats found")
+                print("❌ No public money data found")
                 continue
                 
-            print("✅ Found public money stats")
+            print("✅ Found public money data")
             
             # Format game time
             if game_date:
@@ -138,9 +151,9 @@ def convert_insider_to_big_bettor_format(games, sport):
             print(f"Away Spread - Bets: {spread_away_bets}%, Handle: {spread_away_stake}%, Diff: {spread_away_stake - spread_away_bets}")
             print(f"Home Spread - Bets: {spread_home_bets}%, Handle: {spread_home_stake}%, Diff: {spread_home_stake - spread_home_bets}")
             
-            # Check away team spread (they get + spread) - LOWERED THRESHOLD TO 15
+            # Check away team spread (they get + spread)
             away_diff = spread_away_stake - spread_away_bets
-            if away_diff >= 15:  # Lowered from 30 to 15
+            if away_diff >= 30:
                 print(f"🔥 ALERT: {away_team} spread meets criteria!")
                 away_spread_display = f"+{abs(spread)}" if spread < 0 else f"+{spread}"
                 big_bettor_alerts.append({
@@ -151,9 +164,9 @@ def convert_insider_to_big_bettor_format(games, sport):
                     'game_time': game_time
                 })
             
-            # Check home team spread (they get - spread) - LOWERED THRESHOLD TO 15
+            # Check home team spread (they get - spread)
             home_diff = spread_home_stake - spread_home_bets
-            if home_diff >= 15:  # Lowered from 30 to 15
+            if home_diff >= 30:
                 print(f"🔥 ALERT: {home_team} spread meets criteria!")
                 home_spread_display = f"-{abs(spread)}" if spread > 0 else f"{spread}"
                 big_bettor_alerts.append({
@@ -164,7 +177,7 @@ def convert_insider_to_big_bettor_format(games, sport):
                     'game_time': game_time
                 })
             
-            # Also check moneyline bets
+            # Process moneyline bets
             ml_away_bets = public_money.get('public_money_ml_away_bets_pct', 0)
             ml_away_stake = public_money.get('public_money_ml_away_stake_pct', 0)
             ml_home_bets = public_money.get('public_money_ml_home_bets_pct', 0)
@@ -176,9 +189,9 @@ def convert_insider_to_big_bettor_format(games, sport):
             print(f"Away ML - Bets: {ml_away_bets}%, Handle: {ml_away_stake}%, Diff: {ml_away_stake - ml_away_bets}")
             print(f"Home ML - Bets: {ml_home_bets}%, Handle: {ml_home_stake}%, Diff: {ml_home_stake - ml_home_bets}")
             
-            # Check away team moneyline - LOWERED THRESHOLD TO 15
+            # Check away team moneyline
             away_ml_diff = ml_away_stake - ml_away_bets
-            if away_ml_diff >= 15:  # Lowered from 30 to 15
+            if away_ml_diff >= 15:
                 print(f"🔥 ALERT: {away_team} ML meets criteria!")
                 big_bettor_alerts.append({
                     'team': away_team,
@@ -188,9 +201,9 @@ def convert_insider_to_big_bettor_format(games, sport):
                     'game_time': game_time
                 })
             
-            # Check home team moneyline - LOWERED THRESHOLD TO 15
+            # Check home team moneyline
             home_ml_diff = ml_home_stake - ml_home_bets
-            if home_ml_diff >= 15:  # Lowered from 30 to 15
+            if home_ml_diff >= 15:
                 print(f"🔥 ALERT: {home_team} ML meets criteria!")
                 big_bettor_alerts.append({
                     'team': home_team,
@@ -279,7 +292,6 @@ def get_todays_mlb_games():
         url = f"{INSIDER_BASE_URL}/mlb/games?from={today}&to={today}"
         
         print(f"🌐 MLB URL: {url}")
-        print("⏱️ Making MLB request with 10 second timeout...")
         
         response = requests.get(
             url, 
@@ -294,15 +306,6 @@ def get_todays_mlb_games():
         games = data.get('games', [])
         print(f"✅ Got {len(games)} MLB games for today")
         return games
-    except requests.exceptions.Timeout:
-        print(f"⏰ TIMEOUT: MLB games API call took longer than 10 seconds")
-        return []
-    except requests.exceptions.ConnectionError:
-        print(f"🌐 CONNECTION ERROR: Could not connect to MLB games API")
-        return []
-    except requests.exceptions.HTTPError as e:
-        print(f"🚫 HTTP ERROR for MLB games: {e}")
-        return []
     except Exception as e:
         print(f"❌ Error fetching MLB games: {e}")
         return []
@@ -315,7 +318,6 @@ def get_todays_nfl_games():
         url = f"{INSIDER_BASE_URL}/nfl/games?from={today}&to={today}"
         
         print(f"🌐 NFL URL: {url}")
-        print("⏱️ Making NFL request with 10 second timeout...")
         
         response = requests.get(
             url, 
@@ -330,15 +332,6 @@ def get_todays_nfl_games():
         games = data.get('games', [])
         print(f"✅ Got {len(games)} NFL games for today")
         return games
-    except requests.exceptions.Timeout:
-        print(f"⏰ TIMEOUT: NFL games API call took longer than 10 seconds")
-        return []
-    except requests.exceptions.ConnectionError:
-        print(f"🌐 CONNECTION ERROR: Could not connect to NFL games API")
-        return []
-    except requests.exceptions.HTTPError as e:
-        print(f"🚫 HTTP ERROR for NFL games: {e}")
-        return []
     except Exception as e:
         print(f"❌ Error fetching NFL games: {e}")
         return []
@@ -434,7 +427,7 @@ def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
         wins = conf.get('in_conf_wins', 0)
         losses = conf.get('in_conf_losses', 0)
         side = 'OVER' if conf_roi > 0 else 'UNDER'
-        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
+        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses-{wins}"
         
         qualifying_criteria.append({
             'description': 'When in-conference',
@@ -579,9 +572,6 @@ def get_player_props(game_id):
         print(f"🔄 Fetching props for game {game_id}...")
         url = f"{INSIDER_BASE_URL}/mlb/games/{game_id}/player-props"
         
-        print(f"🌐 Props URL: {url}")
-        print("⏱️ Making props request with 10 second timeout...")
-        
         response = requests.get(
             url, 
             headers={'insider-api-key': INSIDER_API_KEY}, 
@@ -594,15 +584,6 @@ def get_player_props(game_id):
         data = response.json()
         print(f"✅ Got props data for {game_id}")
         return data
-    except requests.exceptions.Timeout:
-        print(f"⏰ TIMEOUT: Props API call for {game_id} took longer than 10 seconds")
-        return None
-    except requests.exceptions.ConnectionError:
-        print(f"🌐 CONNECTION ERROR: Could not connect to props API for {game_id}")
-        return None
-    except requests.exceptions.HTTPError as e:
-        print(f"🚫 HTTP ERROR for props {game_id}: {e}")
-        return None
     except Exception as e:
         print(f"❌ Error fetching props for {game_id}: {e}")
         return None
@@ -632,7 +613,6 @@ def create_mlb_prop_hit_rates_tweet():
                 
             print(f"✅ Found {len(props_data)} prop categories for {game_id}")
             
-            # Process props...
             for prop_category in props_data:
                 prop_key = prop_category.get('prop_key', '')
                 prop_title = prop_category.get('title', '')
@@ -739,7 +719,6 @@ def post_to_twitter(client, text, tweet_type):
         if '403' in error_msg or 'forbidden' in error_msg:
             print(f"❌ Permission denied for {tweet_type}")
             print("💡 Your Twitter app needs 'Read and Write' permissions")
-            print("💡 Go to Twitter Developer Portal > Your App > Settings > User authentication settings")
         elif 'duplicate' in error_msg:
             print(f"⚠️ Duplicate tweet detected for {tweet_type}")
         else:
