@@ -111,7 +111,7 @@ def convert_insider_to_big_bettor_format(games, sport):
             
             # Check away team spread (they get + spread)
             away_diff = spread_away_stake - spread_away_bets
-            if away_diff >= 30:
+            if away_diff >= 25:
                 print(f"🔥 ALERT: {away_team} spread meets criteria!")
                 away_spread_display = f"+{abs(spread)}" if spread < 0 else f"+{spread}"
                 big_bettor_alerts.append({
@@ -124,7 +124,7 @@ def convert_insider_to_big_bettor_format(games, sport):
             
             # Check home team spread (they get - spread)
             home_diff = spread_home_stake - spread_home_bets
-            if home_diff >= 30:
+            if home_diff >= 25:
                 print(f"🔥 ALERT: {home_team} spread meets criteria!")
                 home_spread_display = f"-{abs(spread)}" if spread > 0 else f"{spread}"
                 big_bettor_alerts.append({
@@ -146,7 +146,7 @@ def convert_insider_to_big_bettor_format(games, sport):
             
             # Check away team moneyline
             away_ml_diff = ml_away_stake - ml_away_bets
-            if away_ml_diff >= 30:
+            if away_ml_diff >= 25:
                 print(f"🔥 ALERT: {away_team} ML meets criteria!")
                 big_bettor_alerts.append({
                     'team': away_team,
@@ -158,7 +158,7 @@ def convert_insider_to_big_bettor_format(games, sport):
             
             # Check home team moneyline
             home_ml_diff = ml_home_stake - ml_home_bets
-            if home_ml_diff >= 30:
+            if home_ml_diff >= 25:
                 print(f"🔥 ALERT: {home_team} ML meets criteria!")
                 big_bettor_alerts.append({
                     'team': home_team,
@@ -265,6 +265,8 @@ def create_prop_hit_rates_tweet(sport='MLB'):
     for i, game in enumerate(games, 1):
         try:
             game_id = game['game_id']
+            away_team = game.get('away_team', '')
+            home_team = game.get('home_team', '')
             print(f"📊 Processing game {i}/{len(games)}: {game_id}")
             
             props_data = get_player_props(game_id, sport.lower())
@@ -286,7 +288,16 @@ def create_prop_hit_rates_tweet(sport='MLB'):
                         prop_type = player.get('prop_type', '')
                         opening_line = player.get('opening_line', 0)
                         record = player.get('record', {})
-                        current_odds = player.get('current_odds', -110)  # Default juice
+                        
+                        # Get actual odds and sportsbook from best_line
+                        best_line = player.get('best_line', {})
+                        current_odds = best_line.get('opening_odds', -110)
+                        sportsbook = best_line.get('bookmaker', 'Unknown')
+                        
+                        # Determine which team the player is on
+                        # This is a simplification - you might need more sophisticated logic
+                        # to match players to teams accurately
+                        player_team = "Unknown"
                         
                         # Skip UNDER props except for strikeouts and pitcher outs (MLB) or specific NFL props
                         if sport.upper() == 'MLB':
@@ -305,18 +316,21 @@ def create_prop_hit_rates_tweet(sport='MLB'):
                                     # Clean up prop title
                                     prop_clean = prop_title.replace(' (Over/Under)', '').replace(' (Yes/No)', '').replace('Batter ', '').replace('Pitcher ', '')
                                     
-                                    # Format prop description
+                                    # Format sportsbook name
+                                    book_display = sportsbook.title() if sportsbook != 'Unknown' else ''
+                                    
+                                    # Format prop description with team and sportsbook
                                     if prop_type.lower() == "over":
                                         if opening_line == 0.5:
-                                            prop_description = f"{player_name} 1+ {prop_clean} ({current_odds:+d})"
+                                            prop_description = f"{player_name} 1+ {prop_clean} ({current_odds:+d} {book_display})"
                                         else:
                                             target_number = int(opening_line + 0.5) if opening_line % 1 == 0.5 else int(opening_line + 1)
-                                            prop_description = f"{player_name} {target_number}+ {prop_clean} ({current_odds:+d})"
+                                            prop_description = f"{player_name} {target_number}+ {prop_clean} ({current_odds:+d} {book_display})"
                                     elif prop_type.lower() == "under":
                                         target_number = int(opening_line)
-                                        prop_description = f"{player_name} less than {target_number} {prop_clean} ({current_odds:+d})"
+                                        prop_description = f"{player_name} less than {target_number} {prop_clean} ({current_odds:+d} {book_display})"
                                     else:
-                                        prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean} ({current_odds:+d})"
+                                        prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean} ({current_odds:+d} {book_display})"
                                     
                                     all_props.append({
                                         'description': prop_description,
