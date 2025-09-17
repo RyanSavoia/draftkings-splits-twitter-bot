@@ -319,16 +319,11 @@ def create_prop_hit_rates_tweet(sport='MLB'):
                                     # Format sportsbook name
                                     book_display = sportsbook.title() if sportsbook != 'Unknown' else ''
                                     
-                                    # Format prop description with team and sportsbook
+                                    # Format prop description with exact API values
                                     if prop_type.lower() == "over":
-                                        if opening_line == 0.5:
-                                            prop_description = f"{player_name} 1+ {prop_clean} ({current_odds:+d} {book_display})"
-                                        else:
-                                            target_number = int(opening_line + 0.5) if opening_line % 1 == 0.5 else int(opening_line + 1)
-                                            prop_description = f"{player_name} {target_number}+ {prop_clean} ({current_odds:+d} {book_display})"
+                                        prop_description = f"{player_name} Over {opening_line} {prop_clean} ({current_odds:+d} {book_display})"
                                     elif prop_type.lower() == "under":
-                                        target_number = int(opening_line)
-                                        prop_description = f"{player_name} less than {target_number} {prop_clean} ({current_odds:+d} {book_display})"
+                                        prop_description = f"{player_name} Under {opening_line} {prop_clean} ({current_odds:+d} {book_display})"
                                     else:
                                         prop_description = f"{player_name} {prop_type.title()} {opening_line} {prop_clean} ({current_odds:+d} {book_display})"
                                     
@@ -357,7 +352,7 @@ def create_prop_hit_rates_tweet(sport='MLB'):
     top_props = all_props[:5]
     
     lines = []
-    lines.append(f"These 70%+ {sport} props are must adds to your parlays!")
+    lines.append(f"These 70%+ {sport} props are must adds to your parlays! {'⚾' if sport == 'MLB' else '🏈'}")
     lines.append("")
     
     for i, prop in enumerate(top_props, 1):
@@ -383,7 +378,228 @@ def get_referee_stats(game_id):
         print(f"❌ Error fetching referee stats for {game_id}: {e}")
         return None
 
-def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
+def analyze_referee_spread_edge(ref_stats, game=None, is_home_favored=None):
+    """Analyze referee stats to find SPREAD edges with 5%+ ROI in 3+ criteria"""
+    if not ref_stats or 'referee_odds' not in ref_stats or 'spread' not in ref_stats['referee_odds']:
+        return None
+    
+    spread_data = ref_stats['referee_odds']['spread']
+    qualifying_criteria = []
+    
+    # Get main sections
+    main_spread = spread_data.get('spread', {})
+    conf = spread_data.get('conference', {})
+    range_data = spread_data.get('spread_range', {})
+    
+    # Check overall ATS ROI
+    ats_roi = main_spread.get('ats_roi', 0)
+    if abs(ats_roi) >= 5:
+        ats_wins = main_spread.get('ats_wins', 0)
+        ats_losses = main_spread.get('ats_losses', 0)
+        side = 'FAVORITES' if ats_roi > 0 else 'DOGS'
+        record = f"{ats_wins}-{ats_losses}" if ats_roi > 0 else f"{ats_losses}-{ats_wins}"
+        qualifying_criteria.append({
+            'description': 'Overall ATS',
+            'side': side,
+            'record': record,
+            'roi': round(abs(ats_roi), 1)
+        })
+    
+    # Check home favorite ATS performance
+    home_fav_roi = main_spread.get('home_favorite_net_roi', 0)
+    if abs(home_fav_roi) >= 5:
+        home_fav_wins = main_spread.get('home_favorite_wins', 0)
+        home_fav_losses = main_spread.get('home_favorite_losses', 0)
+        side = 'HOME FAVORITES' if home_fav_roi > 0 else 'HOME DOGS'
+        record = f"{home_fav_wins}-{home_fav_losses}" if home_fav_roi > 0 else f"{home_fav_losses}-{home_fav_wins}"
+        
+        qualifying_criteria.append({
+            'description': 'Home favorites ATS',
+            'side': side,
+            'record': record,
+            'roi': round(abs(home_fav_roi), 1)
+        })
+    
+    # Check conference games ATS
+    conf_roi = conf.get('out_conf_net_roi', 0)
+    if abs(conf_roi) >= 5:
+        conf_wins = conf.get('out_conf_wins', 0)
+        conf_losses = conf.get('out_conf_losses', 0)
+        side = 'OUT-OF-CONF' if conf_roi > 0 else 'IN-CONF'
+        record = f"{conf_wins}-{conf_losses}" if conf_roi > 0 else f"{conf_losses}-{conf_wins}"
+        
+        qualifying_criteria.append({
+            'description': 'Out of conference ATS',
+            'side': side,
+            'record': record,
+            'roi': round(abs(conf_roi), 1)
+        })
+    
+    # Check spread range performance
+    away_range_roi = range_data.get('away_spread_range_roi', 0)
+    if abs(away_range_roi) >= 5:
+        away_range_wins = range_data.get('away_spread_range_wins', 0)
+        away_range_losses = range_data.get('away_spread_range_losses', 0)
+        away_range_desc = range_data.get('away_spread_range', 'away spread range')
+        
+        side = 'AWAY TEAMS' if away_range_roi > 0 else 'HOME TEAMS'
+        record = f"{away_range_wins}-{away_range_losses}" if away_range_roi > 0 else f"{away_range_losses}-{away_range_wins}"
+        
+        qualifying_criteria.append({
+            'description': f'{away_range_desc}',
+            'side': side,
+            'record': record,
+            'roi': round(abs(away_range_roi), 1)
+        })
+    
+    home_range_roi = range_data.get('home_spread_range_roi', 0)
+    if abs(home_range_roi) >= 5:
+        home_range_wins = range_data.get('home_spread_range_wins', 0)
+        home_range_losses = range_data.get('home_spread_range_losses', 0)
+        home_range_desc = range_data.get('home_spread_range', 'home spread range')
+        
+        side = 'HOME TEAMS' if home_range_roi > 0 else 'AWAY TEAMS'
+        record = f"{home_range_wins}-{home_range_losses}" if home_range_roi > 0 else f"{home_range_losses}-{home_range_wins}"
+        
+        qualifying_criteria.append({
+            'description': f'{home_range_desc}',
+            'side': side,
+            'record': record,
+            'roi': round(abs(home_range_roi), 1)
+        })
+    
+    # Need at least 3 criteria with 5%+ ROI
+    if len(qualifying_criteria) < 3:
+        return None
+    
+    # Sort by ROI descending
+    qualifying_criteria.sort(key=lambda x: x['roi'], reverse=True)
+    
+    # Determine the dominant side (most common recommendation)
+    side_count = {}
+    for criteria in qualifying_criteria:
+        side = criteria['side']
+        side_count[side] = side_count.get(side, 0) + 1
+    
+    dominant_side = max(side_count.items(), key=lambda x: x[1])[0]
+    
+    return {
+        'side': dominant_side,
+        'criteria': qualifying_criteria[:3],  # Top 3 by ROI
+        'total_qualifying': len(qualifying_criteria)
+    }
+
+def analyze_referee_moneyline_edge(ref_stats, game=None, is_home_favored=None):
+    """Analyze referee stats to find MONEYLINE edges with 5%+ ROI in 3+ criteria"""
+    if not ref_stats or 'referee_odds' not in ref_stats or 'moneyline' not in ref_stats['referee_odds']:
+        return None
+    
+    ml_data = ref_stats['referee_odds']['moneyline']
+    qualifying_criteria = []
+    
+    # Get main sections
+    main_ml = ml_data.get('ml', {})
+    conf = ml_data.get('conference', {})
+    range_data = ml_data.get('ml_range', {})
+    
+    # Check home ML performance
+    home_ml_roi = main_ml.get('home_ml_roi', 0)
+    if abs(home_ml_roi) >= 5:
+        home_ml_wins = main_ml.get('home_ml_wins', 0)
+        home_ml_losses = main_ml.get('home_ml_losses', 0)
+        side = 'HOME TEAMS' if home_ml_roi > 0 else 'AWAY TEAMS'
+        record = f"{home_ml_wins}-{home_ml_losses}" if home_ml_roi > 0 else f"{home_ml_losses}-{home_ml_wins}"
+        
+        qualifying_criteria.append({
+            'description': 'Home teams ML',
+            'side': side,
+            'record': record,
+            'roi': round(abs(home_ml_roi), 1)
+        })
+    
+    # Check home favorite ML performance
+    home_fav_roi = main_ml.get('home_favorite_net_roi', 0)
+    if abs(home_fav_roi) >= 5:
+        home_fav_wins = main_ml.get('home_favorite_wins', 0)
+        home_fav_losses = main_ml.get('home_favorite_losses', 0)
+        side = 'HOME FAVORITES' if home_fav_roi > 0 else 'HOME DOGS'
+        record = f"{home_fav_wins}-{home_fav_losses}" if home_fav_roi > 0 else f"{home_fav_losses}-{home_fav_wins}"
+        
+        qualifying_criteria.append({
+            'description': 'Home favorites ML',
+            'side': side,
+            'record': record,
+            'roi': round(abs(home_fav_roi), 1)
+        })
+    
+    # Check conference games ML
+    conf_roi = conf.get('out_conf_net_roi', 0)
+    if abs(conf_roi) >= 5:
+        conf_wins = conf.get('out_conf_wins', 0)
+        conf_losses = conf.get('out_conf_losses', 0)
+        side = 'OUT-OF-CONF' if conf_roi > 0 else 'IN-CONF'
+        record = f"{conf_wins}-{conf_losses}" if conf_roi > 0 else f"{conf_losses}-{conf_wins}"
+        
+        qualifying_criteria.append({
+            'description': 'Out of conference ML',
+            'side': side,
+            'record': record,
+            'roi': round(abs(conf_roi), 1)
+        })
+    
+    # Check ML range performance
+    away_ml_roi = range_data.get('away_ml_range_roi', 0)
+    if abs(away_ml_roi) >= 5:
+        away_ml_wins = range_data.get('away_ml_range_wins', 0)
+        away_ml_losses = range_data.get('away_ml_range_losses', 0)
+        away_ml_range = range_data.get('away_ml_range', 'away ML range')
+        
+        side = 'AWAY DOGS' if away_ml_roi > 0 else 'AWAY FAVORITES'
+        record = f"{away_ml_wins}-{away_ml_losses}" if away_ml_roi > 0 else f"{away_ml_losses}-{away_ml_wins}"
+        
+        qualifying_criteria.append({
+            'description': f'Away ML {away_ml_range}',
+            'side': side,
+            'record': record,
+            'roi': round(abs(away_ml_roi), 1)
+        })
+    
+    home_ml_range_roi = range_data.get('home_ml_range_roi', 0)
+    if abs(home_ml_range_roi) >= 5:
+        home_ml_range_wins = range_data.get('home_ml_range_wins', 0)
+        home_ml_range_losses = range_data.get('home_ml_range_losses', 0)
+        home_ml_range = range_data.get('home_ml_range', 'home ML range')
+        
+        side = 'HOME FAVORITES' if home_ml_range_roi > 0 else 'HOME DOGS'
+        record = f"{home_ml_range_wins}-{home_ml_range_losses}" if home_ml_range_roi > 0 else f"{home_ml_range_losses}-{home_ml_range_wins}"
+        
+        qualifying_criteria.append({
+            'description': f'Home ML {home_ml_range}',
+            'side': side,
+            'record': record,
+            'roi': round(abs(home_ml_range_roi), 1)
+        })
+    
+    # Need at least 3 criteria with 5%+ ROI
+    if len(qualifying_criteria) < 3:
+        return None
+    
+    # Sort by ROI descending
+    qualifying_criteria.sort(key=lambda x: x['roi'], reverse=True)
+    
+    # Determine the dominant side
+    side_count = {}
+    for criteria in qualifying_criteria:
+        side = criteria['side']
+        side_count[side] = side_count.get(side, 0) + 1
+    
+    dominant_side = max(side_count.items(), key=lambda x: x[1])[0]
+    
+    return {
+        'side': dominant_side,
+        'criteria': qualifying_criteria[:3],  # Top 3 by ROI
+        'total_qualifying': len(qualifying_criteria)
+    }
     """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria"""
     if not ref_stats or 'referee_odds' not in ref_stats or 'over_under' not in ref_stats['referee_odds']:
         return None
@@ -513,7 +729,171 @@ def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
         'total_qualifying': len(qualifying_criteria)
     }
 
-def create_referee_tweet():
+def create_referee_spread_tweet():
+    """Create referee spread report tweet for NFL games"""
+    print("🔄 Starting referee spread analysis...")
+    games = get_insider_games('NFL')
+    if not games:
+        print("⚠️ No NFL games found for today")
+        return None
+    
+    game_edges = []
+    
+    for game in games:
+        try:
+            game_id = game['game_id']
+            home_team = game.get('home_team', '')
+            away_team = game.get('away_team', '')
+            
+            ref_stats = get_referee_stats(game_id)
+            if not ref_stats:
+                continue
+            
+            # Get referee name
+            referee_name = ref_stats.get('referee_name', 'Unknown Referee')
+            
+            edge_analysis = analyze_referee_spread_edge(ref_stats)
+            if edge_analysis:
+                # Calculate max ROI for sorting
+                max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
+                
+                # Convert team names to abbreviations
+                home_abbrev = home_team.split()[-1][:3].upper()
+                away_abbrev = away_team.split()[-1][:3].upper()
+                
+                game_edges.append({
+                    'game_id': game_id,
+                    'matchup': f"{away_abbrev} @ {home_abbrev}",
+                    'referee': referee_name,
+                    'side': edge_analysis['side'],
+                    'criteria': edge_analysis['criteria'],
+                    'max_roi': max_roi
+                })
+                
+        except Exception as e:
+            print(f"❌ Error processing referee spread stats for game {game.get('name', 'Unknown')}: {e}")
+            continue
+    
+    if not game_edges:
+        print("⚠️ No NFL games found with significant referee spread edges")
+        return None
+    
+    # Sort by max ROI and limit to top 5
+    game_edges.sort(key=lambda x: x['max_roi'], reverse=True)
+    game_edges = game_edges[:5]
+    
+    lines = []
+    
+    # Single game vs multiple games logic
+    if len(game_edges) == 1:
+        game = game_edges[0]
+        lines.append(f"🏈 Referee Report: Take these spreads!")
+        lines.append("")
+        lines.append(f"{game['referee']} ATS picks ({game['matchup']}):")
+        
+        for criteria in game['criteria']:
+            lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+        
+    else:
+        lines.append("🏈 Referee Report: Take these spreads!")
+        
+        for game in game_edges:
+            lines.append("")
+            lines.append(f"{game['referee']} ATS picks ({game['matchup']}):")
+            
+            for criteria in game['criteria']:
+                lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+    
+    return '\n'.join(lines)
+
+def create_referee_moneyline_tweet():
+    """Create referee moneyline report tweet for NFL games"""
+    print("🔄 Starting referee moneyline analysis...")
+    games = get_insider_games('NFL')
+    if not games:
+        print("⚠️ No NFL games found for today")
+        return None
+    
+    game_edges = []
+    
+    for game in games:
+        try:
+            game_id = game['game_id']
+            home_team = game.get('home_team', '')
+            away_team = game.get('away_team', '')
+            
+            ref_stats = get_referee_stats(game_id)
+            if not ref_stats:
+                continue
+            
+            # Get referee name
+            referee_name = ref_stats.get('referee_name', 'Unknown Referee')
+            
+            edge_analysis = analyze_referee_moneyline_edge(ref_stats)
+            if edge_analysis:
+                # Calculate max ROI for sorting
+                max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
+                
+                # Convert team names to abbreviations
+                home_abbrev = home_team.split()[-1][:3].upper()
+                away_abbrev = away_team.split()[-1][:3].upper()
+                
+                game_edges.append({
+                    'game_id': game_id,
+                    'matchup': f"{away_abbrev} @ {home_abbrev}",
+                    'referee': referee_name,
+                    'side': edge_analysis['side'],
+                    'criteria': edge_analysis['criteria'],
+                    'max_roi': max_roi
+                })
+                
+        except Exception as e:
+            print(f"❌ Error processing referee moneyline stats for game {game.get('name', 'Unknown')}: {e}")
+            continue
+    
+    if not game_edges:
+        print("⚠️ No NFL games found with significant referee moneyline edges")
+        return None
+    
+    # Sort by max ROI and limit to top 5
+    game_edges.sort(key=lambda x: x['max_roi'], reverse=True)
+    game_edges = game_edges[:5]
+    
+    lines = []
+    
+    # Single game vs multiple games logic
+    if len(game_edges) == 1:
+        game = game_edges[0]
+        lines.append(f"🏈 Referee Report: Take these moneylines!")
+        lines.append("")
+        lines.append(f"{game['referee']} straight up ({game['matchup']}):")
+        
+        for criteria in game['criteria']:
+            lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+        
+    else:
+        lines.append("🏈 Referee Report: Take these moneylines!")
+        
+        for game in game_edges:
+            lines.append("")
+            lines.append(f"{game['referee']} straight up ({game['matchup']}):")
+            
+            for criteria in game['criteria']:
+                lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
+        
+        lines.append("")
+        lines.append("Drop a ❤️ if you're tailing!")
+    
+    return '\n'.join(lines)
     """Create referee report tweet for NFL games"""
     print("🔄 Starting referee analysis...")
     games = get_insider_games('NFL')
@@ -680,13 +1060,27 @@ def run_betting_analysis():
         email_content.append("-" * 30)
         email_content.append(nfl_props_tweet)
 
-    # Add NFL referee report
-    print(f"\n--- Processing NFL Referee Report ---")
-    nfl_referee_tweet = create_referee_tweet()
-    if nfl_referee_tweet:
-        email_content.append(f"\n\nNFL REFEREE REPORT:")
+    # Add NFL referee reports
+    print(f"\n--- Processing NFL Referee Report - Totals ---")
+    nfl_referee_totals_tweet = create_referee_tweet()
+    if nfl_referee_totals_tweet:
+        email_content.append(f"\n\nNFL REFEREE REPORT - TOTALS:")
         email_content.append("-" * 30)
-        email_content.append(nfl_referee_tweet)
+        email_content.append(nfl_referee_totals_tweet)
+
+    print(f"\n--- Processing NFL Referee Report - Spreads ---")
+    nfl_referee_spreads_tweet = create_referee_spread_tweet()
+    if nfl_referee_spreads_tweet:
+        email_content.append(f"\n\nNFL REFEREE REPORT - SPREADS:")
+        email_content.append("-" * 30)
+        email_content.append(nfl_referee_spreads_tweet)
+
+    print(f"\n--- Processing NFL Referee Report - Moneylines ---")
+    nfl_referee_ml_tweet = create_referee_moneyline_tweet()
+    if nfl_referee_ml_tweet:
+        email_content.append(f"\n\nNFL REFEREE REPORT - MONEYLINES:")
+        email_content.append("-" * 30)
+        email_content.append(nfl_referee_ml_tweet)
 
     # Send email if we have content
     if len(email_content) > 2:  # More than just header
