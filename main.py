@@ -427,7 +427,7 @@ def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
         wins = conf.get('in_conf_wins', 0)
         losses = conf.get('in_conf_losses', 0)
         side = 'OVER' if conf_roi > 0 else 'UNDER'
-        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses-{wins}"
+        record = f"{wins}-{losses}" if side == 'OVER' else f"{losses}-{wins}"
         
         qualifying_criteria.append({
             'description': 'When in-conference',
