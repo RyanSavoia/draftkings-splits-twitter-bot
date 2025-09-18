@@ -600,6 +600,8 @@ def analyze_referee_moneyline_edge(ref_stats, game=None, is_home_favored=None):
         'criteria': qualifying_criteria[:3],  # Top 3 by ROI
         'total_qualifying': len(qualifying_criteria)
     }
+
+def analyze_referee_over_under_edge(ref_stats, game=None, is_home_favored=None):
     """Analyze referee stats to find OVER/UNDER edges with 5%+ ROI in 3+ criteria"""
     if not ref_stats or 'referee_odds' not in ref_stats or 'over_under' not in ref_stats['referee_odds']:
         return None
@@ -813,6 +815,8 @@ def create_referee_tweet():
         lines.append("Drop a ❤️ if you're tailing!")
     
     return '\n'.join(lines)
+
+def create_referee_spread_tweet():
     """Create referee spread report tweet for NFL games"""
     print("🔄 Starting referee spread analysis...")
     games = get_insider_games('NFL')
@@ -969,89 +973,6 @@ def create_referee_moneyline_tweet():
         for game in game_edges:
             lines.append("")
             lines.append(f"{game['referee']} straight up ({game['matchup']}):")
-            
-            for criteria in game['criteria']:
-                lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
-        
-        lines.append("")
-        lines.append("Drop a ❤️ if you're tailing!")
-    
-    return '\n'.join(lines)
-    """Create referee report tweet for NFL games"""
-    print("🔄 Starting referee analysis...")
-    games = get_insider_games('NFL')
-    if not games:
-        print("⚠️ No NFL games found for today")
-        return None
-    
-    game_edges = []
-    
-    for game in games:
-        try:
-            game_id = game['game_id']
-            home_team = game.get('home_team', '')
-            away_team = game.get('away_team', '')
-            
-            ref_stats = get_referee_stats(game_id)
-            if not ref_stats:
-                continue
-            
-            # Get referee name
-            referee_name = ref_stats.get('referee_name', 'Unknown Referee')
-            
-            edge_analysis = analyze_referee_over_under_edge(ref_stats)
-            if edge_analysis:
-                # Calculate max ROI for sorting
-                max_roi = max(criteria['roi'] for criteria in edge_analysis['criteria'])
-                
-                # Convert team names to abbreviations
-                home_abbrev = home_team.split()[-1][:3].upper()  # Get last word, first 3 chars
-                away_abbrev = away_team.split()[-1][:3].upper()  # Get last word, first 3 chars
-                
-                game_edges.append({
-                    'game_id': game_id,
-                    'matchup': f"{away_abbrev} @ {home_abbrev}",
-                    'referee': referee_name,
-                    'side': edge_analysis['side'],
-                    'criteria': edge_analysis['criteria'],
-                    'max_roi': max_roi
-                })
-                
-        except Exception as e:
-            print(f"❌ Error processing referee stats for game {game.get('name', 'Unknown')}: {e}")
-            continue
-    
-    if not game_edges:
-        print("⚠️ No NFL games found with significant referee edges")
-        return None
-    
-    # Sort by max ROI and limit to top 5
-    game_edges.sort(key=lambda x: x['max_roi'], reverse=True)
-    game_edges = game_edges[:5]
-    
-    lines = []
-    
-    # Single game vs multiple games logic
-    if len(game_edges) == 1:
-        game = game_edges[0]
-        side_text = f"{game['side'].lower()}s"  # "unders" or "overs"
-        lines.append(f"🏈 Referee Report: Take this {game['side']}!")
-        lines.append("")
-        lines.append(f"{game['referee']} {side_text} ({game['matchup']}):")
-        
-        for criteria in game['criteria']:
-            lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
-        
-        lines.append("")
-        lines.append("Drop a ❤️ if you're tailing!")
-        
-    else:
-        lines.append("🏈 Referee Report: Take these totals!")
-        
-        for game in game_edges:
-            lines.append("")
-            side_text = f"{game['side'].lower()}s"  # "unders" or "overs"
-            lines.append(f"{game['referee']} {side_text} ({game['matchup']}):")
             
             for criteria in game['criteria']:
                 lines.append(f"{criteria['description']} {criteria['record']}, {criteria['roi']}% ROI")
